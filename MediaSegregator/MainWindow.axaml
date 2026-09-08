@@ -10,20 +10,48 @@
   <DockPanel Margin="12">
 
     <!-- Folder bar -->
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
-      <Button Grid.Column="0"
-              Content="Choose folder…"
-              Click="OnBrowseClick" />
-      <TextBox Grid.Column="1"
-               Margin="8,0"
-               Text="{Binding FolderPath}"
-               KeyDown="OnFolderKeyDown"
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,*,Auto"
+          RowDefinitions="Auto,Auto,Auto"
+          Margin="0,0,0,10"
+          RowSpacing="6"
+          ColumnSpacing="8">
+
+      <TextBlock Grid.Row="0" Grid.Column="0"
+                 Text="Folder z mediami"
+                 VerticalAlignment="Center" />
+      <TextBox Grid.Row="0" Grid.Column="1"
+               Text="{Binding SourceFolder}"
+               KeyDown="OnSourceKeyDown"
                VerticalAlignment="Center" />
-      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+      <Button Grid.Row="0" Grid.Column="2"
+              Content="Wybierz…"
+              Click="OnBrowseSourceClick" />
+
+      <TextBlock Grid.Row="1" Grid.Column="0"
+                 Text="Folder docelowy"
+                 VerticalAlignment="Center" />
+      <TextBox Grid.Row="1" Grid.Column="1"
+               Text="{Binding DestinationFolder}"
+               VerticalAlignment="Center" />
+      <Button Grid.Row="1" Grid.Column="2"
+              Content="Wybierz…"
+              Click="OnBrowseDestinationClick" />
+
+      <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                  Orientation="Horizontal"
+                  Spacing="8"
+                  HorizontalAlignment="Right">
         <CheckBox Content="Subfolders"
                   IsChecked="{Binding Recurse}"
                   VerticalAlignment="Center" />
-        <Button Content="Rescan" Click="OnRescanClick" />
+        <Button Content="Rescan"
+                Click="OnRescanClick"
+                IsEnabled="{Binding !IsBusy}" />
+        <Button Content="Przenieś"
+                Click="OnMoveClick"
+                IsDefault="True"
+                IsEnabled="{Binding !IsBusy}" />
       </StackPanel>
     </Grid>
 
