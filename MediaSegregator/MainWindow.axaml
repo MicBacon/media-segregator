@@ -1,0 +1,60 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MediaSegregator"
+        x:Class="MediaSegregator.MainWindow"
+        x:DataType="local:MainWindow"
+        Title="Media Segregator"
+        Width="900" Height="600"
+        MinWidth="560" MinHeight="320">
+
+  <DockPanel Margin="12">
+
+    <!-- Folder bar -->
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+      <Button Grid.Column="0"
+              Content="Choose folder…"
+              Click="OnBrowseClick" />
+      <TextBox Grid.Column="1"
+               Margin="8,0"
+               Text="{Binding FolderPath}"
+               KeyDown="OnFolderKeyDown"
+               VerticalAlignment="Center" />
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+        <CheckBox Content="Subfolders"
+                  IsChecked="{Binding Recurse}"
+                  VerticalAlignment="Center" />
+        <Button Content="Rescan" Click="OnRescanClick" />
+      </StackPanel>
+    </Grid>
+
+    <!-- Status bar -->
+    <TextBlock DockPanel.Dock="Bottom"
+               Margin="2,10,2,0"
+               Opacity="0.7"
+               Text="{Binding Status}" />
+
+    <!-- File list -->
+    <!-- Column bindings resolve against ScannedFile, not this window, so they
+         use reflection rather than the project-wide compiled bindings. -->
+    <DataGrid ItemsSource="{Binding Files}"
+              x:CompileBindings="False"
+              IsReadOnly="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              BorderThickness="1"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Name"
+                            Binding="{Binding Name}"
+                            Width="*" />
+        <DataGridTextColumn Header="Size"
+                            Binding="{Binding SizeDisplay}"
+                            Width="110" />
+        <DataGridTextColumn Header="Modified"
+                            Binding="{Binding Modified, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                            Width="160" />
+      </DataGrid.Columns>
+    </DataGrid>
+
+  </DockPanel>
+</Window>
