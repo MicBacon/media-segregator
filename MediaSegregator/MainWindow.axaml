@@ -4,7 +4,7 @@
         x:Class="MediaSegregator.MainWindow"
         x:DataType="local:MainWindow"
         Title="Media Segregator"
-        Width="900" Height="600"
+        Width="720" Height="380"
         MinWidth="560" MinHeight="320">
 
   <DockPanel Margin="12">
@@ -42,10 +42,7 @@
                   Orientation="Horizontal"
                   Spacing="8"
                   HorizontalAlignment="Right">
-        <CheckBox Content="Subfolders"
-                  IsChecked="{Binding Recurse}"
-                  VerticalAlignment="Center" />
-        <Button Content="Rescan"
+        <Button Content="Odśwież"
                 Click="OnRescanClick"
                 IsEnabled="{Binding !IsBusy}" />
         <Button Content="Przenieś"
@@ -61,28 +58,30 @@
                Opacity="0.7"
                Text="{Binding Status}" />
 
-    <!-- File list -->
-    <!-- Column bindings resolve against ScannedFile, not this window, so they
-         use reflection rather than the project-wide compiled bindings. -->
-    <DataGrid ItemsSource="{Binding Files}"
-              x:CompileBindings="False"
-              IsReadOnly="True"
-              CanUserSortColumns="True"
-              GridLinesVisibility="Horizontal"
-              BorderThickness="1"
-              BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}">
-      <DataGrid.Columns>
-        <DataGridTextColumn Header="Name"
-                            Binding="{Binding Name}"
-                            Width="*" />
-        <DataGridTextColumn Header="Size"
-                            Binding="{Binding SizeDisplay}"
-                            Width="110" />
-        <DataGridTextColumn Header="Modified"
-                            Binding="{Binding Modified, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
-                            Width="160" />
-      </DataGrid.Columns>
-    </DataGrid>
+    <!-- What the source folder holds, at its top level only -->
+    <Border BorderThickness="1"
+            CornerRadius="4"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+            Padding="24">
+      <Grid ColumnDefinitions="*,*" VerticalAlignment="Center">
+        <StackPanel Grid.Column="0" Spacing="4" HorizontalAlignment="Center">
+          <TextBlock Text="{Binding PhotoCount}"
+                     FontSize="44"
+                     HorizontalAlignment="Center" />
+          <TextBlock Text="Zdjęcia"
+                     Opacity="0.7"
+                     HorizontalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Center">
+          <TextBlock Text="{Binding VideoCount}"
+                     FontSize="44"
+                     HorizontalAlignment="Center" />
+          <TextBlock Text="Filmy"
+                     Opacity="0.7"
+                     HorizontalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+    </Border>
 
   </DockPanel>
 </Window>

@@ -14,8 +14,6 @@ public sealed class AppSettings
 
     public string? DestinationFolder { get; set; }
 
-    public bool Recurse { get; set; }
-
     [JsonIgnore]
     public static string FilePath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

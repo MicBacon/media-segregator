@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -6,7 +5,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
-using Avalonia.Threading;
 
 namespace MediaSegregator;
 
@@ -15,10 +13,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly AppSettings _settings;
     private string _sourceFolder;
     private string _destinationFolder;
-    private string _status = "Ready.";
-    private bool _recurse;
+    private string _status = "Gotowy.";
+    private int _photoCount;
+    private int _videoCount;
     private bool _isBusy;
     private CancellationTokenSource? _scanCts;
+
+    // The media found by the last scan; the UI only shows the counts, but the move
+    // works off the exact set that was counted.
+    private IReadOnlyList<ScannedFile> _files = [];
 
     // While the destination still mirrors the source, picking a new source folder
     // carries the destination along; the first deliberate change to the destination
@@ -35,15 +38,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _sourceFolder = Existing(_settings.SourceFolder) ?? FileScanner.DefaultFolder;
         _destinationFolder = Existing(_settings.DestinationFolder) ?? _sourceFolder;
         _destinationFollowsSource = string.Equals(_destinationFolder, _sourceFolder, StringComparison.Ordinal);
-        _recurse = _settings.Recurse;
 
         AvaloniaXamlLoader.Load(this);
         DataContext = this;
         Opened += (_, _) => _ = RescanAsync();
         Closing += (_, _) => SaveSettings();
     }
-
-    public ObservableCollection<ScannedFile> Files { get; } = [];
 
     public string SourceFolder
     {
@@ -77,16 +77,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         set => Set(ref _status, value);
     }
 
-    public bool Recurse
+    public int PhotoCount
     {
-        get => _recurse;
-        set
-        {
-            if (Set(ref _recurse, value))
-            {
-                _ = RescanAsync();
-            }
-        }
+        get => _photoCount;
+        private set => Set(ref _photoCount, value);
+    }
+
+    public int VideoCount
+    {
+        get => _videoCount;
+        private set => Set(ref _videoCount, value);
     }
 
     /// <summary>True while a move is running, so the buttons stay out of the way.</summary>
@@ -158,13 +158,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (Files.Count == 0)
+        IReadOnlyList<ScannedFile> toMove = _files;
+
+        if (toMove.Count == 0)
         {
             Status = "Brak plików do przeniesienia.";
             return;
         }
-
-        List<ScannedFile> toMove = [.. Files];
 
         IsBusy = true;
         Status = $"Przenoszenie {toMove.Count:N0} plik(ów)…";
@@ -199,11 +199,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         SaveSettings();
 
-        // The source folder just changed underneath us, so the grid is stale.
-        await RescanAsync();
+        // The source folder just changed underneath us, so the counts are stale.
+        await RescanAsync(keepStatus: true);
     }
 
-    private async Task RescanAsync()
+    private async Task RescanAsync(bool keepStatus = false)
     {
         // Supersede any scan still running against the previous folder.
         CancellationTokenSource cts = new();
@@ -211,44 +211,34 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CancellationToken token = cts.Token;
 
         string folder = SourceFolder;
-        bool recurse = Recurse;
 
         if (!Directory.Exists(folder))
         {
-            Files.Clear();
-            Status = $"Folder not found: {folder}";
+            ShowResult(ScanResult.Empty);
+            Status = $"Nie znaleziono folderu: {folder}";
             return;
         }
 
-        Status = "Scanning…";
+        if (!keepStatus)
+        {
+            Status = "Skanowanie…";
+        }
+
         Stopwatch sw = Stopwatch.StartNew();
 
         try
         {
-            // Enumeration hits the disk, so keep it off the UI thread. Results are
-            // materialized on the worker and handed over in one go, so the grid is
-            // not re-laid-out once per file.
-            List<ScannedFile> found = await Task.Run(
-                () => FileScanner.Scan(folder, recurse, token).ToList(), token);
+            // Enumeration hits the disk, so keep it off the UI thread.
+            ScanResult result = await Task.Run(() => FileScanner.Scan(folder, token), token);
 
             token.ThrowIfCancellationRequested();
+            ShowResult(result);
 
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            if (!keepStatus)
             {
-                Files.Clear();
-                foreach (ScannedFile file in found)
-                {
-                    Files.Add(file);
-                }
-            });
-
-            long totalBytes = 0;
-            foreach (ScannedFile file in found)
-            {
-                totalBytes += file.Length;
+                Status = $"{result.Files.Count:N0} plik(ów) · "
+                    + $"{result.TotalBytes / (1024.0 * 1024):N1} MB · {sw.ElapsedMilliseconds} ms";
             }
-
-            Status = $"{found.Count:N0} file(s) · {totalBytes / (1024.0 * 1024):N1} MB · {sw.ElapsedMilliseconds} ms";
         }
         catch (OperationCanceledException)
         {
@@ -256,16 +246,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            Files.Clear();
-            Status = $"Scan failed: {ex.Message}";
+            ShowResult(ScanResult.Empty);
+            Status = $"Skanowanie nie powiodło się: {ex.Message}";
         }
+    }
+
+    private void ShowResult(ScanResult result)
+    {
+        _files = result.Files;
+        PhotoCount = result.Photos;
+        VideoCount = result.Videos;
     }
 
     private void SaveSettings()
     {
         _settings.SourceFolder = SourceFolder;
         _settings.DestinationFolder = DestinationFolder;
-        _settings.Recurse = Recurse;
         _settings.Save();
     }
 
