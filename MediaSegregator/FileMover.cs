@@ -16,7 +16,7 @@ public static class FileMover
         CancellationToken token = default)
     {
         Directory.CreateDirectory(destination);
-        string destinationFull = Path.GetFullPath(destination);
+        string destinationFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(destination));
 
         int moved = 0;
         int skipped = 0;
