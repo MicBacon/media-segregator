@@ -4,8 +4,10 @@
 [Ll]og/
 [Ll]ogs/
 
-## Visual Studio / Rider / VS Code
+## Visual Studio / Rider / VS Code / Claude
 .vs/
+.vscode/
+.claude/
 .idea/
 *.user
 *.suo
