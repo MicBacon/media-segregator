@@ -3,7 +3,7 @@
         xmlns:local="clr-namespace:MediaSegregator"
         x:Class="MediaSegregator.MainWindow"
         x:DataType="local:MainWindow"
-        Title="Media Segregator"
+        Title="Segregator mediów"
         Width="720" Height="380"
         MinWidth="560" MinHeight="320">
 

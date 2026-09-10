@@ -172,13 +172,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            MoveResult result = await Task.Run(() => FileMover.Move(toMove, destination));
+            MoveResult result = await Task.Run(
+                () => FileMover.Move(toMove, destination, DestinationLayout.TargetFor));
 
             string summary = $"Przeniesiono {result.Moved:N0} plik(ów) do {destination} · {sw.ElapsedMilliseconds} ms";
 
+            if (result.Undated > 0)
+            {
+                summary += $" · bez daty: {result.Undated:N0}";
+            }
+
             if (result.Skipped > 0)
             {
-                summary += $" · pominięto {result.Skipped:N0} (już w folderze docelowym)";
+                summary += $" · pominięto {result.Skipped:N0} (już we właściwym folderze)";
             }
 
             if (result.Errors.Count > 0)

@@ -23,18 +23,22 @@ public static class FileScanner
     public static string DefaultFolder => AppContext.BaseDirectory;
 
     /// <summary>
-    /// Container formats an Android camera app can write. JPEG is the default, HEIC the
-    /// newer default on recent devices, DNG the RAW option in pro mode; video is MP4 with
-    /// 3GP on older handsets and WEBM/MKV on a few OEM camera apps.
+    /// Container formats a phone camera or screenshot tool can write. JPEG is the default,
+    /// HEIC the newer default on recent devices, PNG what screenshots land as and DNG the
+    /// RAW option in pro mode; video is MP4 with MOV on iPhones, 3GP on older handsets and
+    /// WEBM/MKV on a few OEM camera apps. Matched case-insensitively, so the .JPG and .MOV
+    /// spellings a camera writes are picked up alongside the lower-case ones.
     /// </summary>
     private static readonly Dictionary<string, MediaKind> MediaExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         [".jpg"] = MediaKind.Photo,
         [".jpeg"] = MediaKind.Photo,
+        [".png"] = MediaKind.Photo,
         [".heic"] = MediaKind.Photo,
         [".heif"] = MediaKind.Photo,
         [".dng"] = MediaKind.Photo,
         [".mp4"] = MediaKind.Video,
+        [".mov"] = MediaKind.Video,
         [".3gp"] = MediaKind.Video,
         [".3gpp"] = MediaKind.Video,
         [".mkv"] = MediaKind.Video,

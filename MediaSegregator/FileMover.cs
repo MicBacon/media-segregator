@@ -1,18 +1,22 @@
 namespace MediaSegregator;
 
 /// <summary>Tally of one move run.</summary>
-public sealed record MoveResult(int Moved, int Skipped, IReadOnlyList<string> Errors);
+public sealed record MoveResult(int Moved, int Skipped, IReadOnlyList<string> Errors, int Undated = 0);
 
 public static class FileMover
 {
     /// <summary>
-    /// Moves <paramref name="files"/> into <paramref name="destination"/>. A file already
-    /// sitting in the destination is skipped rather than moved onto itself, and a name
-    /// clash gets a " (n)" suffix so nothing is ever overwritten.
+    /// Moves <paramref name="files"/> into <paramref name="destination"/>, optionally routed into
+    /// a subfolder chosen per file by <paramref name="targetFor"/> — pass
+    /// <see cref="DestinationLayout.TargetFor"/> for the dated tree, or leave it null to land
+    /// everything in the destination root. Subfolders are created on demand and reused when they
+    /// already exist. A file already sitting in its target folder is skipped rather than moved
+    /// onto itself, and a name clash gets a " (n)" suffix so nothing is ever overwritten.
     /// </summary>
     public static MoveResult Move(
         IEnumerable<ScannedFile> files,
         string destination,
+        Func<ScannedFile, MoveTarget>? targetFor = null,
         CancellationToken token = default)
     {
         Directory.CreateDirectory(destination);
@@ -20,7 +24,12 @@ public static class FileMover
 
         int moved = 0;
         int skipped = 0;
+        int undated = 0;
         List<string> errors = [];
+
+        // One CreateDirectory per folder rather than per file: a run over a few thousand photos
+        // otherwise repeats the same handful of syscalls for every single one.
+        HashSet<string> created = new(PathComparer);
 
         foreach (ScannedFile file in files)
         {
@@ -29,15 +38,38 @@ public static class FileMover
             try
             {
                 string source = Path.GetFullPath(file.Path);
+                string folder = destinationFull;
+                bool dated = true;
 
-                if (string.Equals(Path.GetDirectoryName(source), destinationFull, PathComparison))
+                if (targetFor is not null)
+                {
+                    MoveTarget target = targetFor(file);
+                    dated = target.Dated;
+
+                    folder = Path.TrimEndingDirectorySeparator(
+                        Path.GetFullPath(Path.Combine(destinationFull, target.Subfolder)));
+
+                    if (created.Add(folder))
+                    {
+                        Directory.CreateDirectory(folder);
+                    }
+                }
+
+                if (string.Equals(Path.GetDirectoryName(source), folder, PathComparison))
                 {
                     skipped++;
                     continue;
                 }
 
-                File.Move(source, UniqueTargetPath(destinationFull, file.Name));
+                File.Move(source, UniqueTargetPath(folder, file.Name));
                 moved++;
+
+                // Counted only for files that actually moved, so the tally never claims more
+                // undated media than the run reports having moved.
+                if (!dated)
+                {
+                    undated++;
+                }
             }
             catch (Exception ex)
             {
@@ -45,7 +77,7 @@ public static class FileMover
             }
         }
 
-        return new MoveResult(moved, skipped, errors);
+        return new MoveResult(moved, skipped, errors, undated);
     }
 
     /// <summary>Appends " (1)", " (2)", … until the name is free in <paramref name="folder"/>.</summary>
@@ -74,4 +106,7 @@ public static class FileMover
 
     private static StringComparison PathComparison =>
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    private static StringComparer PathComparer =>
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 }

@@ -15,6 +15,11 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <!--
+      Capture dates out of EXIF (JPEG/HEIC/DNG) and QuickTime (MP4/3GP). There is no
+      Matroska reader in the package, so MKV and WEBM fall back to the file name.
+    -->
+    <PackageReference Include="MetadataExtractor" Version="2.9.3" />
   </ItemGroup>
 
 </Project>

@@ -516,7 +516,7 @@ public sealed class FileMoverTests : IDisposable
         using CancellationTokenSource cts = new();
         cts.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() => FileMover.Move([file], _destination, cts.Token));
+        Assert.Throws<OperationCanceledException>(() => FileMover.Move([file], _destination, token: cts.Token));
 
         Assert.True(File.Exists(Path.Combine(_source, "untouched.jpg")));
         Assert.Empty(DestinationNames());
@@ -536,7 +536,7 @@ public sealed class FileMoverTests : IDisposable
             yield return second;
         }
 
-        Assert.Throws<OperationCanceledException>(() => FileMover.Move(Cancelling(), _destination, cts.Token));
+        Assert.Throws<OperationCanceledException>(() => FileMover.Move(Cancelling(), _destination, token: cts.Token));
 
         Assert.Equal(["first.jpg"], DestinationNames());
         Assert.True(File.Exists(Path.Combine(_source, "second.jpg")));
@@ -551,7 +551,7 @@ public sealed class FileMoverTests : IDisposable
         cts.Cancel();
 
         OperationCanceledException ex =
-            Assert.Throws<OperationCanceledException>(() => FileMover.Move([file], _destination, cts.Token));
+            Assert.Throws<OperationCanceledException>(() => FileMover.Move([file], _destination, token: cts.Token));
 
         Assert.Equal(cts.Token, ex.CancellationToken);
     }
@@ -637,5 +637,185 @@ public sealed class FileMoverTests : IDisposable
         Assert.Equal(1, result.Skipped);
         Assert.Equal(0, result.Moved);
         Assert.Equal(["in-place.jpg"], DestinationNames());
+    }
+
+    // ------------------------------------------------------------- routing
+    //
+    // Everything above exercises the flat default. These cases hand Move a targetFor
+    // delegate and check the dated tree it builds underneath the destination.
+
+    /// <summary>Routes by the date the test names, so no metadata or file name is involved.</summary>
+    private static Func<ScannedFile, MoveTarget> RouteTo(DateTime? taken) =>
+        file => new MoveTarget(DestinationLayout.SubfolderFor(taken, file.Kind), taken is not null);
+
+    private string Dated(params string[] segments) => Path.Combine([_destination, .. segments]);
+
+    [Fact]
+    public void Move_CreatesTheDatedFolderChain_WhenItDoesNotExist()
+    {
+        ScannedFile file = Scan(WriteFile(_source, "incoming.jpg"));
+
+        MoveResult result = FileMover.Move([file], _destination, RouteTo(new DateTime(2026, 3, 1)));
+
+        Assert.Equal(1, result.Moved);
+        Assert.True(File.Exists(Dated("2026", "mar", "01", "Zdjęcia", "incoming.jpg")));
+        Assert.Empty(DestinationNames());
+    }
+
+    [Fact]
+    public void Move_ReusesAnExistingDatedFolder_InsteadOfDuplicatingIt()
+    {
+        WriteFile(Dated("2026", "mar", "01", "Zdjęcia"), "already-here.jpg", "old");
+        ScannedFile file = Scan(WriteFile(_source, "incoming.jpg"));
+
+        FileMover.Move([file], _destination, RouteTo(new DateTime(2026, 3, 1)));
+
+        Assert.Equal(
+            ["already-here.jpg", "incoming.jpg"],
+            Directory.GetFiles(Dated("2026", "mar", "01", "Zdjęcia"))
+                .Select(Path.GetFileName)
+                .OrderBy(n => n, StringComparer.Ordinal));
+
+        Assert.Equal(["2026"], Directory.GetDirectories(_destination).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void Move_SplitsPhotosAndVideosOfTheSameDay()
+    {
+        ScannedFile photo = Scan(WriteFile(_source, "shot.jpg"));
+        ScannedFile video = Scan(WriteFile(_source, "clip.mp4")) with { Kind = MediaKind.Video };
+
+        FileMover.Move([photo, video], _destination, RouteTo(new DateTime(2026, 3, 1)));
+
+        Assert.True(File.Exists(Dated("2026", "mar", "01", "Zdjęcia", "shot.jpg")));
+        Assert.True(File.Exists(Dated("2026", "mar", "01", "Wideo", "clip.mp4")));
+    }
+
+    [Fact]
+    public void Move_RoutesUndatedMediaToBezDaty_AndCountsThem()
+    {
+        ScannedFile photo = Scan(WriteFile(_source, "blob.jpg"));
+        ScannedFile video = Scan(WriteFile(_source, "blob.mp4")) with { Kind = MediaKind.Video };
+
+        MoveResult result = FileMover.Move([photo, video], _destination, RouteTo(null));
+
+        Assert.Equal(2, result.Moved);
+        Assert.Equal(2, result.Undated);
+        Assert.True(File.Exists(Dated("Bez daty", "Zdjęcia", "blob.jpg")));
+        Assert.True(File.Exists(Dated("Bez daty", "Wideo", "blob.mp4")));
+    }
+
+    [Fact]
+    public void Move_CountsOnlyUndatedFiles()
+    {
+        ScannedFile dated = Scan(WriteFile(_source, "dated.jpg"));
+
+        MoveResult result = FileMover.Move([dated], _destination, RouteTo(new DateTime(2026, 3, 1)));
+
+        Assert.Equal(1, result.Moved);
+        Assert.Equal(0, result.Undated);
+    }
+
+    [Fact]
+    public void Move_DoesNotCountUndatedFilesItSkipped()
+    {
+        // Otherwise a re-run could report "moved 0 · undated 1", which reads as nonsense.
+        string path = WriteFile(Dated("Bez daty", "Zdjęcia"), "settled.jpg");
+
+        MoveResult result = FileMover.Move([Scan(path)], _destination, RouteTo(null));
+
+        Assert.Equal(1, result.Skipped);
+        Assert.Equal(0, result.Moved);
+        Assert.Equal(0, result.Undated);
+    }
+
+    [Fact]
+    public void Move_ReportsNoUndated_WhenRoutingIsNotUsed()
+    {
+        ScannedFile file = Scan(WriteFile(_source, "incoming.jpg"));
+
+        Assert.Equal(0, FileMover.Move([file], _destination).Undated);
+    }
+
+    /// <summary>Re-running over an already-sorted tree must settle, not churn.</summary>
+    [Fact]
+    public void Move_SkipsAFileAlreadySittingInItsDatedFolder()
+    {
+        string path = WriteFile(Dated("2026", "mar", "01", "Zdjęcia"), "settled.jpg", "same");
+
+        MoveResult result = FileMover.Move([Scan(path)], _destination, RouteTo(new DateTime(2026, 3, 1)));
+
+        Assert.Equal(1, result.Skipped);
+        Assert.Equal(0, result.Moved);
+        Assert.Equal("same", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Move_MovesAFileSittingInTheWrongDatedFolder()
+    {
+        string path = WriteFile(Dated("2025", "sty", "05", "Zdjęcia"), "misfiled.jpg");
+
+        MoveResult result = FileMover.Move([Scan(path)], _destination, RouteTo(new DateTime(2026, 3, 1)));
+
+        Assert.Equal(1, result.Moved);
+        Assert.False(File.Exists(path));
+        Assert.True(File.Exists(Dated("2026", "mar", "01", "Zdjęcia", "misfiled.jpg")));
+    }
+
+    [Fact]
+    public void Move_SuffixesANameClashInsideADatedFolder()
+    {
+        WriteFile(Dated("2026", "mar", "01", "Zdjęcia"), "clash.jpg", "existing");
+        ScannedFile incoming = Scan(WriteFile(_source, "clash.jpg", "incoming"));
+
+        FileMover.Move([incoming], _destination, RouteTo(new DateTime(2026, 3, 1)));
+
+        string folder = Dated("2026", "mar", "01", "Zdjęcia");
+        Assert.Equal("existing", File.ReadAllText(Path.Combine(folder, "clash.jpg")));
+        Assert.Equal("incoming", File.ReadAllText(Path.Combine(folder, "clash (1).jpg")));
+    }
+
+    [Fact]
+    public void Move_SendsTwoDaysToTwoFolders()
+    {
+        ScannedFile march = Scan(WriteFile(_source, "march.jpg"));
+        ScannedFile january = Scan(WriteFile(_source, "january.jpg"));
+
+        FileMover.Move([march], _destination, RouteTo(new DateTime(2026, 3, 1)));
+        FileMover.Move([january], _destination, RouteTo(new DateTime(2026, 1, 9)));
+
+        Assert.True(File.Exists(Dated("2026", "mar", "01", "Zdjęcia", "march.jpg")));
+        Assert.True(File.Exists(Dated("2026", "sty", "09", "Zdjęcia", "january.jpg")));
+    }
+
+    [Fact]
+    public void Move_RecordsAnErrorAndKeepsGoing_WhenRoutingThrows()
+    {
+        ScannedFile bad = Scan(WriteFile(_source, "bad.jpg"));
+        ScannedFile good = Scan(WriteFile(_source, "good.jpg"));
+
+        MoveResult result = FileMover.Move(
+            [bad, good],
+            _destination,
+            file => file.Name == "bad.jpg"
+                ? throw new InvalidOperationException("unreadable")
+                : new MoveTarget(DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), file.Kind), true));
+
+        Assert.Equal(1, result.Moved);
+        Assert.Equal(["bad.jpg: unreadable"], result.Errors);
+        Assert.True(File.Exists(Dated("2026", "mar", "01", "Zdjęcia", "good.jpg")));
+    }
+
+    [Fact]
+    public void Move_WithRouting_StillLetsCancellationEscape()
+    {
+        ScannedFile file = Scan(WriteFile(_source, "incoming.jpg"));
+        using CancellationTokenSource cts = new();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            FileMover.Move([file], _destination, RouteTo(new DateTime(2026, 3, 1)), cts.Token));
+
+        Assert.True(File.Exists(file.Path));
     }
 }
