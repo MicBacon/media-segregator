@@ -21,23 +21,18 @@ public static partial class MediaDate
     private static readonly DateTime Earliest = new(1990, 1, 1);
 
     /// <summary>The capture date, or null when the file admits to none.</summary>
-    public static DateTime? Taken(ScannedFile file) =>
-        FromMetadata(file.Path) ?? FromFileName(file.Name);
+    public static DateTime? Taken(ScannedFile file) => Taken(file, Metadata.Read(file.Path));
 
-    private static DateTime? FromMetadata(string path)
+    /// <summary>
+    /// The same answer from metadata already read, for the routing that also wants the
+    /// coordinates and should not open the file a second time to get them.
+    /// </summary>
+    public static DateTime? Taken(ScannedFile file, IReadOnlyList<MetadataDirectory> directories) =>
+        // An unreadable or unrecognised file arrives here as an empty list; the name may still know.
+        FromMetadata(directories) ?? FromFileName(file.Name);
+
+    private static DateTime? FromMetadata(IReadOnlyList<MetadataDirectory> directories)
     {
-        IReadOnlyList<MetadataDirectory> directories;
-
-        try
-        {
-            directories = ImageMetadataReader.ReadMetadata(path);
-        }
-        catch (Exception)
-        {
-            // Unrecognised container, truncated file, no read access — the name may still know.
-            return null;
-        }
-
         return AppleCreationDate(directories)
             ?? Probe<ExifSubIfdDirectory>(directories, ExifSubIfdDirectory.TagDateTimeOriginal)
             ?? Probe<ExifSubIfdDirectory>(directories, ExifSubIfdDirectory.TagDateTimeDigitized)
