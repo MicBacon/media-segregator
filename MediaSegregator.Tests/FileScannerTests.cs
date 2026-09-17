@@ -103,4 +103,5 @@ public sealed class FileScannerTests : IDisposable
         Assert.Equal(2, result.Photos);
         Assert.Equal(2, result.Videos);
     }
+
 }

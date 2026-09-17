@@ -4,8 +4,9 @@
         x:Class="MediaSegregator.MainWindow"
         x:DataType="local:MainWindow"
         Title="Segregator mediów"
-        Width="720" Height="380"
-        MinWidth="560" MinHeight="320">
+        Icon="/Assets/Obiekt_zabytkowy_znak-window.png"
+        Width="1000" Height="500"
+        CanResize="False">
 
   <DockPanel Margin="12">
 
@@ -45,43 +46,66 @@
         <Button Content="Odśwież"
                 Click="OnRescanClick"
                 IsEnabled="{Binding !IsBusy}" />
-        <Button Content="Przenieś"
-                Click="OnMoveClick"
-                IsDefault="True"
-                IsEnabled="{Binding !IsBusy}" />
+        <Button Content="Licencje"
+                Click="OnLicensesClick" />
       </StackPanel>
+    </Grid>
+
+    <!-- Copy and cancel -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto"
+          ColumnSpacing="8">
+      <Button Grid.Column="0"
+              Content="Kopiuj"
+              Click="OnCopyClick"
+              IsDefault="True"
+              HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Center"
+              IsEnabled="{Binding !IsBusy}" />
+      <Button Grid.Column="1"
+              Content="Anuluj"
+              Click="OnCancelClick"
+              IsEnabled="{Binding IsBusy}" />
     </Grid>
 
     <!-- Status bar -->
     <TextBlock DockPanel.Dock="Bottom"
                Margin="2,10,2,0"
                Opacity="0.7"
-               Text="{Binding Status}" />
+               Text="{Binding Status}"
+               TextWrapping="Wrap" />
 
-    <!-- What the source folder holds, at its top level only -->
-    <Border BorderThickness="1"
-            CornerRadius="4"
-            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-            Padding="24">
-      <Grid ColumnDefinitions="*,*" VerticalAlignment="Center">
-        <StackPanel Grid.Column="0" Spacing="4" HorizontalAlignment="Center">
-          <TextBlock Text="{Binding PhotoCount}"
-                     FontSize="44"
-                     HorizontalAlignment="Center" />
-          <TextBlock Text="Zdjęcia"
-                     Opacity="0.7"
-                     HorizontalAlignment="Center" />
-        </StackPanel>
-        <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Center">
-          <TextBlock Text="{Binding VideoCount}"
-                     FontSize="44"
-                     HorizontalAlignment="Center" />
-          <TextBlock Text="Filmy"
-                     Opacity="0.7"
-                     HorizontalAlignment="Center" />
-        </StackPanel>
-      </Grid>
-    </Border>
+    <!-- Only worth the space while a copy is running -->
+    <ProgressBar DockPanel.Dock="Bottom"
+                 Margin="2,10,2,0"
+                 Minimum="0"
+                 Maximum="100"
+                 Value="{Binding Progress}"
+                 IsVisible="{Binding IsBusy}" />
 
+                <!-- What the source folder holds, at its top level only -->
+                <Border BorderThickness="1"
+                                                CornerRadius="4"
+                                                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                                                Padding="24">
+                        <Grid ColumnDefinitions="*,*" VerticalAlignment="Center">
+                                <StackPanel Grid.Column="0" Spacing="4" HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding PhotoCount}"
+                                                                                 FontSize="44"
+                                                                                 HorizontalAlignment="Center" />
+                                        <TextBlock Text="Zdjęcia"
+                                                                                 Opacity="0.7"
+                                                                                 HorizontalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding VideoCount}"
+                                                                                 FontSize="44"
+                                                                                 HorizontalAlignment="Center" />
+                                        <TextBlock Text="Filmy"
+                                                                                 Opacity="0.7"
+                                                                                 HorizontalAlignment="Center" />
+                                </StackPanel>
+                        </Grid>
+                </Border>
   </DockPanel>
 </Window>

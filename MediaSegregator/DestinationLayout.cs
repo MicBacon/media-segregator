@@ -1,14 +1,16 @@
 using System.Globalization;
+using MetadataDirectory = MetadataExtractor.Directory;
 
 namespace MediaSegregator;
 
 /// <summary>Where one file is headed, relative to the destination root.</summary>
-public readonly record struct MoveTarget(string Subfolder, bool Dated);
+public readonly record struct CopyTarget(string Subfolder, bool Dated);
 
 /// <summary>
-/// The folder tree the destination is organised into: "2026/mar/01/Zdjęcia" for media whose
-/// capture date is known, "Bez daty/Wideo" for the rest. <see cref="SubfolderFor"/> is pure
-/// string work — the caller does the I/O — so the layout is testable without a disk.
+/// The folder tree the destination is organised into: "2026_03_01/Zdjęcia/Warszawa" for media that
+/// knows when and where it was taken, "2026_03_01/Zdjęcia" when there is no location, and
+/// "Bez daty/Wideo" when there is no date either. <see cref="SubfolderFor"/> is pure string work —
+/// the caller does the I/O — so the layout is testable without a disk.
 /// </summary>
 public static class DestinationLayout
 {
@@ -16,37 +18,40 @@ public static class DestinationLayout
     public const string PhotoFolder = "Zdjęcia";
     public const string VideoFolder = "Wideo";
 
-    private static readonly string[] Months =
-        ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
-
     /// <summary>
-    /// The subfolder <paramref name="kind"/> media taken on <paramref name="taken"/> belongs in,
-    /// relative to the destination root; <see cref="UndatedFolder"/> when the date is unknown.
+    /// The subfolder <paramref name="kind"/> media taken on <paramref name="taken"/> at
+    /// <paramref name="place"/> belongs in, relative to the destination root;
+    /// <see cref="UndatedFolder"/> when the date is unknown and no third segment when the place is.
     /// Built with Path.Combine rather than literal separators so the result compares equal to a
     /// directory name read back off disk on Windows, and formatted invariantly so a locale with
     /// non-ASCII digits cannot leak into a folder name.
     /// </summary>
-    public static string SubfolderFor(DateTime? taken, MediaKind kind)
+    public static string SubfolderFor(DateTime? taken, MediaKind kind, string? place = null)
     {
+        string dateFolder = taken is { } date
+            ? date.ToString("yyyy_MM_dd", CultureInfo.InvariantCulture)
+            : UndatedFolder;
+
         string kindFolder = kind == MediaKind.Photo ? PhotoFolder : VideoFolder;
 
-        return taken is { } date
-            ? Path.Combine(
-                date.Year.ToString("0000", CultureInfo.InvariantCulture),
-                Months[date.Month - 1],
-                date.Day.ToString("00", CultureInfo.InvariantCulture),
-                kindFolder)
-            : Path.Combine(UndatedFolder, kindFolder);
+        return string.IsNullOrWhiteSpace(place)
+            ? Path.Combine(dateFolder, kindFolder)
+            : Path.Combine(dateFolder, kindFolder, place);
     }
 
     /// <summary>
-    /// Reads the capture date off disk and routes accordingly. This is where the two halves meet,
-    /// and the delegate <see cref="FileMover.Move"/> is handed by the app.
+    /// Reads the capture date and the coordinates off disk and routes accordingly. This is where
+    /// the pure halves meet, and the delegate <see cref="FileCopier.Copy"/> is handed by the app.
     /// </summary>
-    public static MoveTarget TargetFor(ScannedFile file)
+    public static CopyTarget TargetFor(ScannedFile file)
     {
-        DateTime? taken = MediaDate.Taken(file);
+        // Read once and asked twice: the date and the coordinates live in the same directories, and
+        // a run of a hundred thousand photos should not open and parse every one of them twice.
+        IReadOnlyList<MetadataDirectory> metadata = Metadata.Read(file.Path);
 
-        return new MoveTarget(SubfolderFor(taken, file.Kind), taken is not null);
+        DateTime? taken = MediaDate.Taken(file, metadata);
+        string? place = MediaLocation.Of(metadata) is { } point ? Places.NameFor(point) : null;
+
+        return new CopyTarget(SubfolderFor(taken, file.Kind, place), taken is not null);
     }
 }

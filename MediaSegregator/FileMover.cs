@@ -3,6 +3,26 @@ namespace MediaSegregator;
 /// <summary>Tally of one move run.</summary>
 public sealed record MoveResult(int Moved, int Skipped, IReadOnlyList<string> Errors, int Undated = 0);
 
+/// <summary>
+/// Moving media instead of copying it, kept against the day the app offers the choice.
+///
+/// <b>Nothing calls this.</b> The app copies — see <see cref="FileCopier"/> — and this file is
+/// parked deliberately rather than deleted. It is also the one type here with no tests: the suite
+/// that covered it became <c>FileCopierTests</c> when the app switched to copying, so treat the
+/// behaviour below as unverified since then.
+///
+/// Before wiring it up, walk the invariants in CLAUDE.md again. Two differences from
+/// <see cref="FileCopier"/> are intentional and worth understanding first:
+/// <list type="bullet">
+/// <item>skipping is only "the file already sits in its target folder" — the copier's extra "same
+/// name and same length" rule exists because copying leaves the original behind for a second run to
+/// find again, which moving does not;</item>
+/// <item>there is no progress reporting and no partial-file handling, because
+/// <see cref="File.Move(string, string)"/> within a volume is a rename and takes no time. Across
+/// volumes it is a copy-and-delete, and a 100 GB move would then be every bit as slow and as
+/// uninterruptible as the copier was built to avoid.</item>
+/// </list>
+/// </summary>
 public static class FileMover
 {
     /// <summary>
@@ -16,7 +36,7 @@ public static class FileMover
     public static MoveResult Move(
         IEnumerable<ScannedFile> files,
         string destination,
-        Func<ScannedFile, MoveTarget>? targetFor = null,
+        Func<ScannedFile, CopyTarget>? targetFor = null,
         CancellationToken token = default)
     {
         Directory.CreateDirectory(destination);
@@ -43,7 +63,7 @@ public static class FileMover
 
                 if (targetFor is not null)
                 {
-                    MoveTarget target = targetFor(file);
+                    CopyTarget target = targetFor(file);
                     dated = target.Dated;
 
                     folder = Path.TrimEndingDirectorySeparator(

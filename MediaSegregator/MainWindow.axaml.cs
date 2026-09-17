@@ -17,11 +17,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private int _photoCount;
     private int _videoCount;
     private bool _isBusy;
+    private double _progress;
     private CancellationTokenSource? _scanCts;
+    private CancellationTokenSource? _copyCts;
 
-    // The media found by the last scan; the UI only shows the counts, but the move
+    // The media found by the last scan; the UI only shows the counts, but the copy
     // works off the exact set that was counted.
     private IReadOnlyList<ScannedFile> _files = [];
+
+    // What the scan weighed, which is what turns bytes copied into a percentage.
+    private long _totalBytes;
+
+    // The folder _files was read from. The textbox writes through on every keystroke, so the path
+    // shown can have moved on since the last scan, and copying the previous folder's list would
+    // quietly sort the wrong library.
+    private string? _scannedFolder;
+
+    // The last progress the running copy reported, so a cancelled run can still say how far it got.
+    private CopyProgress? _lastProgress;
 
     // While the destination still mirrors the source, picking a new source folder
     // carries the destination along; the first deliberate change to the destination
@@ -89,11 +102,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         private set => Set(ref _videoCount, value);
     }
 
-    /// <summary>True while a move is running, so the buttons stay out of the way.</summary>
+    /// <summary>True while a copy is running, so the buttons stay out of the way.</summary>
     public bool IsBusy
     {
         get => _isBusy;
         set => Set(ref _isBusy, value);
+    }
+
+    /// <summary>How much of the run is done, as a percentage of the bytes the scan weighed.</summary>
+    public double Progress
+    {
+        get => _progress;
+        private set => Set(ref _progress, value);
     }
 
     private async void OnBrowseSourceClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -123,10 +143,70 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 SuggestedStartLocation = await StorageProvider.TryGetFolderFromPathAsync(startAt),
             });
 
-        return picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
+        if (picked.Count == 0)
+        {
+            return null;
+        }
+
+        if (picked[0].TryGetLocalPath() is { } path)
+        {
+            return path;
+        }
+
+        // On Windows a phone appears under "Ten komputer" as an MTP device rather than a drive,
+        // and a OneDrive folder can be online-only; neither has a path the file APIs can open.
+        // Saying so beats the picker closing as though nothing had been chosen at all.
+        Status = "Ten folder nie jest zwykłym folderem na dysku — telefon podłączony przez MTP "
+            + "nie ma litery dysku. Podłącz kartę pamięci albo skopiuj pliki na dysk.";
+
+        return null;
     }
 
     private void OnRescanClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _ = RescanAsync();
+
+    private async void OnLicensesClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        Window licenses = new()
+        {
+            Title = "Licencje — Segregator mediów",
+            Width = 680,
+            Height = 520,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new ScrollViewer
+            {
+                Margin = new Avalonia.Thickness(20),
+                Content = new TextBlock
+                {
+                    Text = LicenseText,
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                },
+            },
+        };
+
+        await licenses.ShowDialog(this);
+    }
+
+    private const string LicenseText = """
+        Segregator mediów
+
+        Ten program jest udostępniany na licencji MIT.
+        Copyright (c) 2026 Michał Boczoń
+
+        Licencja MIT pozwala używać, kopiować, modyfikować i rozpowszechniać program, pod warunkiem
+        zachowania informacji o prawach autorskich i treści licencji. Program jest udostępniany
+        „tak jak jest”, bez gwarancji.
+
+        Program zawiera także dane GeoNames (lista nazw miejsc w Data/cities.tsv), udostępniane
+        na licencji CC BY 4.0. Autorstwo: GeoNames. Szczegóły: https://creativecommons.org/licenses/by/4.0/
+
+        Program korzysta również z bibliotek .NET, Avalonia, MetadataExtractor i ich zależności.
+        Pełna lista komponentów, autorów i treści wymaganych licencji znajduje się w pliku
+        THIRD-PARTY-NOTICES.txt, dostarczanym obok pliku wykonywalnego.
+
+        Pełny tekst licencji programu znajduje się w pliku LICENSE.txt, również dostarczanym obok
+        pliku wykonywalnego.
+        """;
 
     private void OnSourceKeyDown(object? sender, KeyEventArgs e)
     {
@@ -136,7 +216,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async void OnMoveClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    private async void OnCopyClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (IsBusy)
         {
@@ -158,24 +238,83 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        IReadOnlyList<ScannedFile> toMove = _files;
-
-        if (toMove.Count == 0)
-        {
-            Status = "Brak plików do przeniesienia.";
-            return;
-        }
-
+        // Claimed before the first await, not after: everything below yields to the UI thread at
+        // least once, and Kopiuj is kept out of a second, overlapping run only by this flag
+        // already being up when the click comes back round.
         IsBusy = true;
-        Status = $"Przenoszenie {toMove.Count:N0} plik(ów)…";
-        Stopwatch sw = Stopwatch.StartNew();
 
         try
         {
-            MoveResult result = await Task.Run(
-                () => FileMover.Move(toMove, destination, DestinationLayout.TargetFor));
+            if (!string.Equals(_scannedFolder, source, StringComparison.Ordinal))
+            {
+                await RescanAsync();
+            }
 
-            string summary = $"Przeniesiono {result.Moved:N0} plik(ów) do {destination} · {sw.ElapsedMilliseconds} ms";
+            IReadOnlyList<ScannedFile> toCopy = _files;
+            long totalBytes = _totalBytes;
+
+            if (toCopy.Count == 0)
+            {
+                Status = "Brak plików do skopiowania.";
+                return;
+            }
+
+            // Checked again here rather than trusted from the scan: the destination can have been
+            // retyped since, and this is the last moment before a copy that may run for an hour.
+            string warning = await Task.Run(() => SpaceWarning(destination, totalBytes));
+
+            using CancellationTokenSource cts = new();
+            _copyCts = cts;
+            _lastProgress = null;
+
+            Progress = 0;
+            Status = $"Kopiowanie {toCopy.Count:N0} plik(ów) · {Size(totalBytes)}…{warning}";
+            Stopwatch sw = Stopwatch.StartNew();
+
+            // Built here, on the UI thread, so it marshals every report back to it by itself.
+            IProgress<CopyProgress> reporter = new Progress<CopyProgress>(progress =>
+            {
+                _lastProgress = progress;
+
+                // The bar tracks everything the run has dealt with, not just what it wrote: a
+                // second run over a sorted library copies nothing and would otherwise sit at
+                // nought throughout. What was actually copied is in the summary the run ends with.
+                Progress = totalBytes > 0 ? Math.Min(100, progress.BytesSettled * 100.0 / totalBytes) : 0;
+                Status = $"Kopiowanie {Size(progress.BytesSettled)} z {Size(totalBytes)} · {progress.CurrentFile}";
+            });
+
+            await RunCopyAsync(toCopy, destination, cts, reporter, sw);
+        }
+        finally
+        {
+            IsBusy = false;
+            Progress = 0;
+            _copyCts = null;
+        }
+
+        SaveSettings();
+
+        // No rescan: copying leaves the source folder exactly as the scan found it.
+    }
+
+    /// <summary>
+    /// The copy itself, and the status line it leaves behind. Split out so <see cref="IsBusy"/> can
+    /// be claimed before the first await above and released in one place once everything is done.
+    /// </summary>
+    private async Task RunCopyAsync(
+        IReadOnlyList<ScannedFile> toCopy,
+        string destination,
+        CancellationTokenSource cts,
+        IProgress<CopyProgress> reporter,
+        Stopwatch sw)
+    {
+        try
+        {
+            CopyResult result = await Task.Run(
+                () => FileCopier.Copy(toCopy, destination, DestinationLayout.TargetFor, cts.Token, reporter));
+
+            string summary = $"Skopiowano {result.Copied:N0} plik(ów) · {Size(result.BytesCopied)} "
+                + $"do {destination} · {sw.ElapsedMilliseconds:N0} ms";
 
             if (result.Undated > 0)
             {
@@ -184,7 +323,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (result.Skipped > 0)
             {
-                summary += $" · pominięto {result.Skipped:N0} (już we właściwym folderze)";
+                summary += $" · pominięto {result.Skipped:N0} (już skopiowane)";
             }
 
             if (result.Errors.Count > 0)
@@ -194,22 +333,59 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             Status = summary;
         }
+        catch (OperationCanceledException)
+        {
+            // The exception carries no tally, so the last report the run posted is what is left.
+            Status = $"Przerwano · skopiowano {_lastProgress?.FilesDone ?? 0:N0} plik(ów) "
+                + $"({Size(_lastProgress?.BytesDone ?? 0)})";
+        }
         catch (Exception ex)
         {
-            Status = $"Przenoszenie nie powiodło się: {ex.Message}";
+            Status = $"Kopiowanie nie powiodło się: {ex.Message}";
         }
-        finally
-        {
-            IsBusy = false;
-        }
-
-        SaveSettings();
-
-        // The source folder just changed underneath us, so the counts are stale.
-        await RescanAsync(keepStatus: true);
     }
 
-    private async Task RescanAsync(bool keepStatus = false)
+    private void OnCancelClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_copyCts is { } cts)
+        {
+            Status = "Przerywanie…";
+            cts.Cancel();
+        }
+    }
+
+    /// <summary>
+    /// The clause to hang off a status line when the run will not fit where it is going, and an
+    /// empty string when it will or when the system would not say.
+    ///
+    /// A warning rather than a refusal, deliberately. The figure is the whole library, while a
+    /// second run over an already-sorted one copies almost none of it — blocking on this number
+    /// would lock the user out of exactly the cheap, repeatable run the skip rule was built for.
+    /// </summary>
+    private static string SpaceWarning(string destination, long bytes)
+    {
+        if (string.IsNullOrWhiteSpace(destination))
+        {
+            return string.Empty;
+        }
+
+        SpaceCheck space = FileCopier.RoomFor(destination, bytes);
+
+        return space is { Fits: false, Available: { } free }
+            ? $" · uwaga: w folderze docelowym wolne tylko {Size(free)} z potrzebnych {Size(bytes)}"
+            : string.Empty;
+    }
+
+    /// <summary>Bytes as the largest unit that keeps the number readable.</summary>
+    private static string Size(long bytes) => bytes switch
+    {
+        >= 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024 * 1024):N1} GB",
+        >= 1024 * 1024 => $"{bytes / (1024.0 * 1024):N1} MB",
+        >= 1024 => $"{bytes / 1024.0:N1} kB",
+        _ => $"{bytes:N0} B",
+    };
+
+    private async Task RescanAsync()
     {
         // Supersede any scan still running against the previous folder.
         CancellationTokenSource cts = new();
@@ -220,16 +396,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (!Directory.Exists(folder))
         {
-            ShowResult(ScanResult.Empty);
+            ShowResult(folder, ScanResult.Empty);
             Status = $"Nie znaleziono folderu: {folder}";
             return;
         }
 
-        if (!keepStatus)
-        {
-            Status = "Skanowanie…";
-        }
-
+        Status = "Skanowanie…";
         Stopwatch sw = Stopwatch.StartNew();
 
         try
@@ -238,13 +410,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ScanResult result = await Task.Run(() => FileScanner.Scan(folder, token), token);
 
             token.ThrowIfCancellationRequested();
-            ShowResult(result);
+            ShowResult(folder, result);
 
-            if (!keepStatus)
-            {
-                Status = $"{result.Files.Count:N0} plik(ów) · "
-                    + $"{result.TotalBytes / (1024.0 * 1024):N1} MB · {sw.ElapsedMilliseconds} ms";
-            }
+            // Now that the run has a weight, say up front whether it can land — a scan is the only
+            // moment the whole figure is known before anything has been copied. DriveInfo is a
+            // disk call like the scan itself, so it stays off the UI thread too.
+            string destination = DestinationFolder;
+            string warning = await Task.Run(() => SpaceWarning(destination, result.TotalBytes), token);
+
+            Status = $"{result.Files.Count:N0} plik(ów) · {Size(result.TotalBytes)} "
+                + $"· {sw.ElapsedMilliseconds:N0} ms{warning}";
         }
         catch (OperationCanceledException)
         {
@@ -252,14 +427,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            ShowResult(ScanResult.Empty);
+            ShowResult(folder, ScanResult.Empty);
             Status = $"Skanowanie nie powiodło się: {ex.Message}";
         }
     }
 
-    private void ShowResult(ScanResult result)
+    private void ShowResult(string folder, ScanResult result)
     {
+        _scannedFolder = folder;
         _files = result.Files;
+        _totalBytes = result.TotalBytes;
         PhotoCount = result.Photos;
         VideoCount = result.Videos;
     }

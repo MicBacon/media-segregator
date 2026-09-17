@@ -7,6 +7,12 @@
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!--
+      The icon Windows Explorer shows on the .exe, which has to be an .ico — a PNG will not do.
+      Assets/app.ico is the same monument sign, centred on a transparent square (the artwork is
+      portrait) and rendered at 16 through 256 px. Regenerate it from the PNG if the sign changes.
+    -->
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
@@ -20,6 +26,30 @@
       Matroska reader in the package, so MKV and WEBM fall back to the file name.
     -->
     <PackageReference Include="MetadataExtractor" Version="2.9.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      GeoNames place names trimmed to name, latitude and longitude, so a photo's coordinates can
+      become "Zakopane" or "Berlin" with no network call. Embedded rather than copied next to the
+      executable because the app ships as a single self-contained file.
+    -->
+    <EmbeddedResource Include="Data/cities.tsv" />
+
+    <!-- The window and taskbar icon, which Avalonia loads by resource path at runtime. -->
+    <AvaloniaResource Include="Assets/Obiekt_zabytkowy_znak.png" />
+    <AvaloniaResource Include="Assets/Obiekt_zabytkowy_znak-window.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      MIT, Apache-2.0, BSD-3-Clause and OFL all require their licence text to accompany a binary
+      redistribution, and the embedded GeoNames data is CC BY 4.0, which requires attribution in
+      the distributed work. The single-file .exe carries all of it inside, so these two files have
+      to travel beside it — copy them wherever the .exe goes.
+    -->
+    <None Include="../LICENSE.txt" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../THIRD-PARTY-NOTICES.txt" Link="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
