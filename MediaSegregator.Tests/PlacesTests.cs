@@ -47,11 +47,12 @@ public sealed class PlacesTests
     }
 
     /// <summary>
-    /// GeoNames' Polish alternate names are not all names. These two rows arrived carrying a
-    /// Wikipedia URL and a holiday-let advertisement, which had replaced the villages' own names
-    /// and would have become folders called "https___en.wikipedia.org_wiki_Motarzyn" and
-    /// "Dom 957 m2 nad jeziorem Iławskim…". Both are fixed in the data; the recipe in README.md
-    /// now rejects such alternates so a regeneration cannot bring them back.
+    /// Not every GeoNames name is a name. These two records carry a Wikipedia URL and a
+    /// holiday-let advertisement in their <em>primary</em> name column, and neither has a Polish
+    /// alternate to recover from, so without the correction they would ship as folders called
+    /// "https___en.wikipedia.org_wiki_Motarzyn" and "Dom 957 m2 nad jeziorem Iławskim…". The
+    /// recipe in README.md fixes both by GeoNames id; this test is what fails if a regeneration
+    /// of the data file loses that correction.
     /// </summary>
     [Theory]
     [InlineData(53.8753, 16.2343, "Motarzyn")]
@@ -75,6 +76,18 @@ public sealed class PlacesTests
     public void NameFor_AFixAbroad_NamesTheGlobalPlace(double latitude, double longitude, string expected)
     {
         Assert.Equal(expected, Places.NameFor(new GeoPoint(latitude, longitude)));
+    }
+
+    /// <summary>
+    /// Nearest wins outright, with no weighting by population — the rule that lets a Bieszczady
+    /// photo name its hamlet. Its other face shows in a city built of named neighbourhoods: these
+    /// are Tokyo Station's own coordinates, and the folder is named after the ward GeoNames puts
+    /// nearest, not after Tokyo. Changing this would cost the village-level names.
+    /// </summary>
+    [Fact]
+    public void NameFor_ChoosesTheNearestPlace_NotTheBiggest()
+    {
+        Assert.Equal("Asagaya-minami", Places.NameFor(new GeoPoint(35.6762, 139.6503)));
     }
 
     [Fact]

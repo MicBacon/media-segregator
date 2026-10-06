@@ -4,7 +4,7 @@ namespace MediaSegregator.Tests;
 
 /// <summary>
 /// The folder tree is pure string work, so the SubfolderFor tests never touch a disk. Paths are
-/// asserted against Path.Combine rather than a literal "2026_03_01/…" so they hold on Windows too.
+/// asserted against Path.Combine rather than a literal "2026-03-01/…" so they hold on Windows too.
 ///
 /// TargetFor does touch a disk — it is the one place where the date reader, the location reader
 /// and the place list meet — so the section at the bottom gives it a temp folder. What it covers
@@ -46,11 +46,11 @@ public sealed class DestinationLayoutTests : IDisposable
     public void SubfolderFor_MatchesTheRequestedLayout()
     {
         Assert.Equal(
-            Expected("2026_03_01", "Zdjęcia"),
+            Expected("2026-03-01", "Zdjęcia"),
             DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo));
 
         Assert.Equal(
-            Expected("2025_03_01", "Wideo"),
+            Expected("2025-03-01", "Wideo"),
             DestinationLayout.SubfolderFor(new DateTime(2025, 3, 1), MediaKind.Video));
     }
 
@@ -58,7 +58,7 @@ public sealed class DestinationLayoutTests : IDisposable
     public void SubfolderFor_PadsTheMonthAndDayToTwoDigits()
     {
         Assert.Equal(
-            Expected("2026_01_09", "Zdjęcia"),
+            Expected("2026-01-09", "Zdjęcia"),
             DestinationLayout.SubfolderFor(new DateTime(2026, 1, 9), MediaKind.Photo));
     }
 
@@ -74,13 +74,13 @@ public sealed class DestinationLayoutTests : IDisposable
     public void SubfolderFor_HandlesLeapDay()
     {
         Assert.Equal(
-            Expected("2024_02_29", "Zdjęcia"),
+            Expected("2024-02-29", "Zdjęcia"),
             DestinationLayout.SubfolderFor(new DateTime(2024, 2, 29), MediaKind.Photo));
     }
 
     [Theory]
-    [InlineData(2025, 12, 31, "2025_12_31")]
-    [InlineData(2026, 1, 1, "2026_01_01")]
+    [InlineData(2025, 12, 31, "2025-12-31")]
+    [InlineData(2026, 1, 1, "2026-01-01")]
     public void SubfolderFor_HandlesYearBoundaries(int year, int month, int day, string expected)
     {
         Assert.Equal(
@@ -93,7 +93,7 @@ public sealed class DestinationLayoutTests : IDisposable
     {
         string subfolder = DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, "Warszawa");
 
-        Assert.Equal(["2026_03_01", "Zdjęcia", "Warszawa"], subfolder.Split(Path.DirectorySeparatorChar));
+        Assert.Equal(["2026-03-01", "Zdjęcia", "Warszawa"], subfolder.Split(Path.DirectorySeparatorChar));
     }
 
     // ------------------------------------------------------------------- place
@@ -102,11 +102,11 @@ public sealed class DestinationLayoutTests : IDisposable
     public void SubfolderFor_AddsThePlaceBelowTheMediaKind()
     {
         Assert.Equal(
-            Expected("2026_03_01", "Zdjęcia", "Zakopane"),
+            Expected("2026-03-01", "Zdjęcia", "Zakopane"),
             DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, "Zakopane"));
 
         Assert.Equal(
-            Expected("2026_03_01", "Wideo", "Zakopane"),
+            Expected("2026-03-01", "Wideo", "Zakopane"),
             DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Video, "Zakopane"));
     }
 
@@ -121,7 +121,7 @@ public sealed class DestinationLayoutTests : IDisposable
     public void SubfolderFor_WithoutAPlace_StopsAtTheMediaKind(string? place)
     {
         Assert.Equal(
-            Expected("2026_03_01", "Zdjęcia"),
+            Expected("2026-03-01", "Zdjęcia"),
             DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, place));
     }
 
@@ -155,7 +155,7 @@ public sealed class DestinationLayoutTests : IDisposable
             CultureInfo.CurrentCulture = new CultureInfo("ar-EG");
 
             Assert.Equal(
-                Expected("2026_03_01", "Zdjęcia"),
+                Expected("2026-03-01", "Zdjęcia"),
                 DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo));
         }
         finally
@@ -185,7 +185,7 @@ public sealed class DestinationLayoutTests : IDisposable
         CopyTarget target = DestinationLayout.TargetFor(Plain("IMG_20260301_142233.jpg"));
 
         Assert.True(target.Dated);
-        Assert.Equal(Expected("2026_03_01", "Zdjęcia"), target.Subfolder);
+        Assert.Equal(Expected("2026-03-01", "Zdjęcia"), target.Subfolder);
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed class DestinationLayoutTests : IDisposable
     {
         CopyTarget target = DestinationLayout.TargetFor(Plain("VID_20260301_142233.mp4", MediaKind.Video));
 
-        Assert.Equal(Expected("2026_03_01", "Wideo"), target.Subfolder);
+        Assert.Equal(Expected("2026-03-01", "Wideo"), target.Subfolder);
     }
 
     [Fact]

@@ -7,8 +7,8 @@ namespace MediaSegregator;
 public readonly record struct CopyTarget(string Subfolder, bool Dated);
 
 /// <summary>
-/// The folder tree the destination is organised into: "2026_03_01/Zdjęcia/Warszawa" for media that
-/// knows when and where it was taken, "2026_03_01/Zdjęcia" when there is no location, and
+/// The folder tree the destination is organised into: "2026-03-01/Zdjęcia/Warszawa" for media that
+/// knows when and where it was taken, "2026-03-01/Zdjęcia" when there is no location, and
 /// "Bez daty/Wideo" when there is no date either. <see cref="SubfolderFor"/> is pure string work —
 /// the caller does the I/O — so the layout is testable without a disk.
 /// </summary>
@@ -29,7 +29,7 @@ public static class DestinationLayout
     public static string SubfolderFor(DateTime? taken, MediaKind kind, string? place = null)
     {
         string dateFolder = taken is { } date
-            ? date.ToString("yyyy_MM_dd", CultureInfo.InvariantCulture)
+            ? date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
             : UndatedFolder;
 
         string kindFolder = kind == MediaKind.Photo ? PhotoFolder : VideoFolder;

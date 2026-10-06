@@ -10,20 +10,36 @@ namespace MediaSegregator;
 ///
 /// The list covers the world from GeoNames cities500, with the full Polish populated-place list
 /// kept alongside it so domestic photos still resolve down to villages and hamlets. It is trimmed
-/// to name, latitude and longitude and embedded as <c>Data/cities.tsv</c>. Nothing here throws: a
-/// missing or damaged resource simply means every shot is filed under its coordinates.
+/// to name, latitude and longitude and embedded as <c>Data/cities.tsv</c>. Names read as GeoNames
+/// spells them, so abroad they are the local or English form — "Praha" comes out "Prague" — while
+/// Polish places carry their Polish names. Nothing here throws: a missing or damaged resource
+/// simply means every shot is filed under its coordinates.
+///
+/// Nearest wins outright, with no weighting by population. That is what lets a photo taken in the
+/// Bieszczady be filed under the hamlet it was taken in rather than the nearest town, and it is
+/// also why a city dense with named neighbourhoods can answer with one of those instead of itself:
+/// shooting in Asagaya gives "Asagaya-minami", not "Tokyo".
 /// </summary>
 public static class Places
 {
     /// <summary>
-    /// Past this, the nearest place says nothing true about where the shot was taken. Fifteen
-    /// kilometres is generous inside Poland, where the list puts a village within a few kilometres
-    /// of anywhere, while still keeping remote fixes away from misleading city names.
+    /// Past this, the nearest place says nothing true about where the shot was taken: open sea,
+    /// desert and ice get coordinates rather than the name of whatever lies over the horizon.
+    /// Fifteen kilometres is generous anywhere inhabited, the list being dense enough to put a
+    /// settlement within a few kilometres, and short enough that a fix in the middle of the Sahara
+    /// does not borrow a name from several hundred away.
     /// </summary>
     private const double MaxDistanceKm = 15;
 
-    /// <summary>Half a degree of latitude is 55 km, so the band cannot miss a place within range.</summary>
-    private const double BandDegrees = 0.5;
+    /// <summary>
+    /// How far up and down the latitude-sorted list a query has to look. Derived from the threshold
+    /// rather than written as a number, because the two must not drift apart: a degree of latitude
+    /// is 110.574 km at its shortest, so dividing by a deliberately low 110 leaves the band a
+    /// margin over <see cref="MaxDistanceKm"/> and no place within range can fall outside it.
+    /// Keeping it tight is what keeps a query cheap — the world list holds a quarter of a million
+    /// rows, and a band four times wider than necessary measures four times as many of them.
+    /// </summary>
+    private const double BandDegrees = MaxDistanceKm / 110.0;
 
     private const string ResourceName = "MediaSegregator.Data.cities.tsv";
 
@@ -53,8 +69,8 @@ public static class Places
         }
 
         double limit = point.Latitude + BandDegrees;
-        // One cosine for the whole query rather than one per candidate: over 50 km the flat-earth
-        // approximation is accurate to a few metres, which is far below the resolution of the answer.
+        // One cosine for the whole query rather than one per candidate: over this few kilometres the
+        // flat-earth approximation is accurate to metres, far below the resolution of the answer.
         double longitudeScale = Math.Cos(point.Latitude * Math.PI / 180) * 111.320;
         double bestKm = MaxDistanceKm;
         string? best = null;
