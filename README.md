@@ -4,7 +4,7 @@ Sorts phone photos and videos into a dated folder tree. The originals are **copi
 so the source folder is left exactly as it was found.
 
 ```
-2026_03_01/
+2026-03-01/
   Zdjęcia/
     zrzut-ekranu.png            <- no coordinates, so no third level
     Warszawa/IMG_0001.jpg
@@ -22,8 +22,10 @@ the file's own metadata, resolved to the nearest settlement with no network call
 **Place names cover the world** — GeoNames' worldwide `cities500` list is embedded for photos taken
 abroad, while Poland keeps the full town, village and hamlet list. A photo taken in the Bieszczady
 is still filed under `Wetlina`, and a photo from Berlin now lands under `Berlin` instead of
-`2026_07_04/Zdjęcia/52.5N 13.4E`. The threshold is 15 km, which is generous inside Poland and keeps
-remote fixes under coordinates rather than misleading city names.
+`2026-07-04/Zdjęcia/52.5N 13.4E`. The threshold is 15 km: generous anywhere inhabited, and short
+enough that open sea, desert and ice get coordinates instead of borrowing a name from over the
+horizon. Nearest wins outright, with no weighting by size — the rule that files a Bieszczady photo
+under its hamlet also means Tokyo Station lands under the ward nearest to it.
 
 Running it twice over the same source is free: a file whose copy is already in the target folder
 under the same name and the same length is skipped.
@@ -42,9 +44,9 @@ dotnet publish MediaSegregator/MediaSegregator.csproj \
 
 #### Place names
 
-`MediaSegregator/Data/cities.tsv` holds 266 805 rows of `name<TAB>latitude<TAB>longitude`, sorted by
-latitude, embedded in the executable. It is built from three [GeoNames](https://www.geonames.org/)
-exports:
+`MediaSegregator/Data/cities.tsv` holds 267 039 rows of `name<TAB>latitude<TAB>longitude`, sorted by
+latitude, embedded in the executable — 221 613 from the world and 45 426 from Poland. It is built
+from three [GeoNames](https://www.geonames.org/) exports:
 
 | File | Used for |
 | --- | --- |
@@ -59,15 +61,30 @@ rows come from `cities500.zip`, excluding Polish rows so the more detailed Polis
 over. Polish names are replaced by their `isolanguage = pl` alternate name where one exists,
 preferring the entry flagged `isPreferredName` and ignoring historical and colloquial spellings —
 this is what turns GeoNames' "Warsaw" into "Warszawa". Latitude and longitude are rounded to four
-decimals for the Polish full list and kept as exported for the worldwide list.
+decimals throughout.
 
-Not every Polish alternate name is a name. An alternate is rejected, and the GeoNames primary name
-kept instead, when it contains `://` or runs past 45 characters. Both rules are needed and both are
-measured against the data: one row arrived as `https://en.wikipedia.org/wiki/Motarzyn` at 38
-characters — *shorter* than the longest real name, `Jerzmanowo-Jarnołtów-Strachowice-Osiniec` at 39
-— so length alone cannot catch it, while the 62-character holiday-let advertisement that had
-displaced a `Nowa Wieś` has no URL in it to catch. Without both, two villages ship as folders named
-after a Wikipedia link and a rental listing.
+##### Two vandalised rows
+
+Not every GeoNames name is a name, and the junk is in the **primary** name column rather than in an
+alternate. Two Polish villages ship as `https://en.wikipedia.org/wiki/Motarzyn` and as a
+67-character holiday-let advertisement ending in the words `Nowa Wieś`; neither record has a Polish
+alternate to fall back on, so no general rule can recover the real name. They are corrected by
+GeoNames id — `12451017` → `Motarzyn`, `9036717` → `Nowa Wieś` — and
+`NameFor_RowsWhoseAlternateNameWasNotAName` fails if a regeneration loses the correction.
+
+Two sanity rules guard against the next one, and they are deliberately not the same rule
+everywhere:
+
+- **A name containing `://` is dropped, worldwide.** No real name in any of the three exports
+  contains it, so this costs nothing and catches the Motarzyn class.
+- **A Polish name longer than 45 characters is dropped.** The longest real Polish name is
+  `Osiedle im. Józefa Montwiłła-Mireckiego` at 42, so there is headroom. This rule is **not**
+  applied abroad: 65 world names are longer than 45 characters and every one is genuine, from
+  Mexican and Italian compound names to the 97-character `United Townships of Dysart, Dudley,
+  Harcourt, …` in Ontario.
+
+A row whose name is junk, with no override and no usable alternate, is dropped rather than guessed
+at — no folder name is better than a wrong one.
 
 GeoNames data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 

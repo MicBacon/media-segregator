@@ -1018,13 +1018,13 @@ public sealed class FileCopierTests : IDisposable
     [Fact]
     public void Copy_OrphanedPartialInADatedFolder_IsSwept()
     {
-        WriteOrphanedPartial(Dated("2026_03_01", "Zdjęcia"), "killed.mp4.part");
+        WriteOrphanedPartial(Dated("2026-03-01", "Zdjęcia"), "killed.mp4.part");
         ScannedFile file = Scan(WriteFile(_source, "incoming.jpg"));
 
         FileCopier.Copy([file], _destination, RouteTo(new DateTime(2026, 3, 1)));
 
         Assert.Empty(PartialFiles());
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "incoming.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "incoming.jpg")));
     }
 
     /// <summary>
@@ -1035,7 +1035,7 @@ public sealed class FileCopierTests : IDisposable
     [Fact]
     public void Copy_OrphanedPartialInAFolderTheRunNeverVisits_IsLeftAlone()
     {
-        string untouched = WriteOrphanedPartial(Dated("2019_01_01", "Wideo"), "killed.mp4.part");
+        string untouched = WriteOrphanedPartial(Dated("2019-01-01", "Wideo"), "killed.mp4.part");
         ScannedFile file = Scan(WriteFile(_source, "incoming.jpg"));
 
         FileCopier.Copy([file], _destination, RouteTo(new DateTime(2026, 3, 1)));
@@ -1124,7 +1124,7 @@ public sealed class FileCopierTests : IDisposable
         CopyResult result = FileCopier.Copy([file], _destination, RouteTo(new DateTime(2026, 3, 1)));
 
         Assert.Equal(1, result.Copied);
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "incoming.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "incoming.jpg")));
         Assert.Empty(DestinationNames());
     }
 
@@ -1136,8 +1136,8 @@ public sealed class FileCopierTests : IDisposable
 
         FileCopier.Copy([photo, video], _destination, RouteTo(new DateTime(2026, 3, 1), "Zakopane"));
 
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "Zakopane", "shot.jpg")));
-        Assert.True(File.Exists(Dated("2026_03_01", "Wideo", "Zakopane", "clip.mp4")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "Zakopane", "shot.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Wideo", "Zakopane", "clip.mp4")));
     }
 
     [Fact]
@@ -1149,25 +1149,25 @@ public sealed class FileCopierTests : IDisposable
         FileCopier.Copy([here], _destination, RouteTo(new DateTime(2026, 3, 1), "Kraków"));
         FileCopier.Copy([there], _destination, RouteTo(new DateTime(2026, 3, 1), "Gdańsk"));
 
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "Kraków", "here.jpg")));
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "Gdańsk", "there.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "Kraków", "here.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "Gdańsk", "there.jpg")));
     }
 
     [Fact]
     public void Copy_ReusesAnExistingDatedFolder_InsteadOfDuplicatingIt()
     {
-        WriteFile(Dated("2026_03_01", "Zdjęcia"), "already-here.jpg", "old");
+        WriteFile(Dated("2026-03-01", "Zdjęcia"), "already-here.jpg", "old");
         ScannedFile file = Scan(WriteFile(_source, "incoming.jpg"));
 
         FileCopier.Copy([file], _destination, RouteTo(new DateTime(2026, 3, 1)));
 
         Assert.Equal(
             ["already-here.jpg", "incoming.jpg"],
-            Directory.GetFiles(Dated("2026_03_01", "Zdjęcia"))
+            Directory.GetFiles(Dated("2026-03-01", "Zdjęcia"))
                 .Select(Path.GetFileName)
                 .OrderBy(n => n, StringComparer.Ordinal));
 
-        Assert.Equal(["2026_03_01"], Directory.GetDirectories(_destination).Select(Path.GetFileName));
+        Assert.Equal(["2026-03-01"], Directory.GetDirectories(_destination).Select(Path.GetFileName));
     }
 
     [Fact]
@@ -1178,8 +1178,8 @@ public sealed class FileCopierTests : IDisposable
 
         FileCopier.Copy([photo, video], _destination, RouteTo(new DateTime(2026, 3, 1)));
 
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "shot.jpg")));
-        Assert.True(File.Exists(Dated("2026_03_01", "Wideo", "clip.mp4")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "shot.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Wideo", "clip.mp4")));
     }
 
     [Fact]
@@ -1232,7 +1232,7 @@ public sealed class FileCopierTests : IDisposable
     [Fact]
     public void Copy_SkipsAFileAlreadySittingInItsDatedFolder()
     {
-        string path = WriteFile(Dated("2026_03_01", "Zdjęcia"), "settled.jpg", "same");
+        string path = WriteFile(Dated("2026-03-01", "Zdjęcia"), "settled.jpg", "same");
 
         CopyResult result = FileCopier.Copy([Scan(path)], _destination, RouteTo(new DateTime(2026, 3, 1)));
 
@@ -1260,24 +1260,24 @@ public sealed class FileCopierTests : IDisposable
     [Fact]
     public void Copy_CopiesAFileSittingInTheWrongDatedFolder()
     {
-        string path = WriteFile(Dated("2025_01_05", "Zdjęcia"), "misfiled.jpg");
+        string path = WriteFile(Dated("2025-01-05", "Zdjęcia"), "misfiled.jpg");
 
         CopyResult result = FileCopier.Copy([Scan(path)], _destination, RouteTo(new DateTime(2026, 3, 1)));
 
         Assert.Equal(1, result.Copied);
         Assert.True(File.Exists(path));
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "misfiled.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "misfiled.jpg")));
     }
 
     [Fact]
     public void Copy_SuffixesANameClashInsideADatedFolder()
     {
-        WriteFile(Dated("2026_03_01", "Zdjęcia"), "clash.jpg", "existing file");
+        WriteFile(Dated("2026-03-01", "Zdjęcia"), "clash.jpg", "existing file");
         ScannedFile incoming = Scan(WriteFile(_source, "clash.jpg", "incoming"));
 
         FileCopier.Copy([incoming], _destination, RouteTo(new DateTime(2026, 3, 1)));
 
-        string folder = Dated("2026_03_01", "Zdjęcia");
+        string folder = Dated("2026-03-01", "Zdjęcia");
         Assert.Equal("existing file", File.ReadAllText(Path.Combine(folder, "clash.jpg")));
         Assert.Equal("incoming", File.ReadAllText(Path.Combine(folder, "clash (1).jpg")));
     }
@@ -1291,8 +1291,8 @@ public sealed class FileCopierTests : IDisposable
         FileCopier.Copy([march], _destination, RouteTo(new DateTime(2026, 3, 1)));
         FileCopier.Copy([january], _destination, RouteTo(new DateTime(2026, 1, 9)));
 
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "march.jpg")));
-        Assert.True(File.Exists(Dated("2026_01_09", "Zdjęcia", "january.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "march.jpg")));
+        Assert.True(File.Exists(Dated("2026-01-09", "Zdjęcia", "january.jpg")));
     }
 
     [Fact]
@@ -1310,7 +1310,7 @@ public sealed class FileCopierTests : IDisposable
 
         Assert.Equal(1, result.Copied);
         Assert.Equal(["bad.jpg: unreadable"], result.Errors);
-        Assert.True(File.Exists(Dated("2026_03_01", "Zdjęcia", "good.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "good.jpg")));
     }
 
     [Fact]

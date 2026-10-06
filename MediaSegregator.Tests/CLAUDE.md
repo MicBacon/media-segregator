@@ -1,6 +1,6 @@
 # Writing tests for Media Segregator
 
-The suite is 210 tests that run in about 300 ms with no mocks, no fakes and no committed fixture
+The suite is 211 tests that run in about 350 ms with no mocks, no fakes and no committed fixture
 binaries. It is worth keeping it that way. Read one existing file end to end before adding to it —
 [FileCopierTests.cs](FileCopierTests.cs) for I/O, [MediaLocationTests.cs](MediaLocationTests.cs) and
 [MediaDateTests.cs](MediaDateTests.cs) for binary fixtures,
@@ -174,7 +174,7 @@ Assert.Equal("incoming", File.ReadAllText(Path.Combine(_destination, "clash (1).
 
 ## Portability and determinism
 
-- Build expected paths with `Path.Combine`, never a literal `"2026_03_01/Zdjęcia"` — the suite must
+- Build expected paths with `Path.Combine`, never a literal `"2026-03-01/Zdjęcia"` — the suite must
   pass on Windows, which is the deployment target.
 - Set `CultureInfo.CurrentCulture` explicitly when a test is about culture, and restore it in a
   `finally`.
