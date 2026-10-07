@@ -18,6 +18,8 @@ public sealed class PlacesTests
     [InlineData(50.0614, 19.9366, "Kraków")]
     [InlineData(54.3523, 18.6491, "Gdańsk")]
     [InlineData(49.2990, 19.9489, "Zakopane")]
+    [InlineData(52.4069, 16.9299, "Poznań")]
+    [InlineData(53.4289, 14.5530, "Szczecin")]
     public void NameFor_NamesThePlaceAFixSitsIn(double latitude, double longitude, string expected)
     {
         Assert.Equal(expected, Places.NameFor(new GeoPoint(latitude, longitude)));
@@ -78,16 +80,81 @@ public sealed class PlacesTests
         Assert.Equal(expected, Places.NameFor(new GeoPoint(latitude, longitude)));
     }
 
+    // ------------------------------------------------------ districts and cities
+
     /// <summary>
-    /// Nearest wins outright, with no weighting by population — the rule that lets a Bieszczady
-    /// photo name its hamlet. Its other face shows in a city built of named neighbourhoods: these
-    /// are Tokyo Station's own coordinates, and the folder is named after the ward GeoNames puts
-    /// nearest, not after Tokyo. Changing this would cost the village-level names.
+    /// A city keeps its name across the whole of itself. GeoNames holds a city's districts as
+    /// populated places in their own right, each nearer to the camera than the city marker is, so
+    /// a photograph of the Opéra was filed under "Paris 09 Opéra", one from Gdańsk's Przymorze
+    /// under "Przymorze Małe" and one from Ursynów under "Ursynów". Those rows are dropped when
+    /// the list is built; these are their own coordinates, the worst case, standing exactly where
+    /// the dropped record used to win.
     /// </summary>
-    [Fact]
-    public void NameFor_ChoosesTheNearestPlace_NotTheBiggest()
+    [Theory]
+    [InlineData(48.8718, 2.3399, "Paris")]        // was Paris 09 Opéra
+    [InlineData(48.8925, 2.3444, "Paris")]        // was Paris 18 Buttes-Montmartre
+    [InlineData(43.2829, 5.3602, "Marseille")]    // was Marseille 07
+    [InlineData(54.4098, 18.5784, "Gdańsk")]      // was Przymorze Małe
+    [InlineData(54.4072, 18.5536, "Gdańsk")]      // was Oliwa
+    [InlineData(54.3944, 18.6023, "Gdańsk")]      // was Zaspa
+    [InlineData(52.1505, 21.0504, "Warszawa")]    // was Ursynów
+    [InlineData(52.2924, 20.9353, "Warszawa")]    // was Bielany
+    [InlineData(50.0617, 19.9373, "Kraków")]      // Rynek Główny, was Stare Miasto
+    [InlineData(51.1100, 17.0313, "Wrocław")]     // Rynek, was Stare Miasto
+    [InlineData(51.7592, 19.4560, "Łódź")]        // Piotrkowska, was Stare Polesie
+    [InlineData(50.2664, 19.0238, "Katowice")]    // Spodek, was Zespół dzielnic śródmiejskich
+    [InlineData(51.5014, 7.4108, "Dortmund")]     // was Dorstfeld
+    public void NameFor_PrefersTheCity_OverItsOwnDistricts(
+        double latitude, double longitude, string expected)
     {
-        Assert.Equal("Asagaya-minami", Places.NameFor(new GeoPoint(35.6762, 139.6503)));
+        Assert.Equal(expected, Places.NameFor(new GeoPoint(latitude, longitude)));
+    }
+
+    /// <summary>
+    /// The other side of dropping a city's districts, and the reason it is keyed on administration
+    /// rather than on distance: these are all nearer to a big city's marker than some of its own
+    /// districts are, and every one of them is a town in its own right. Sopot is closer to
+    /// Gdańsk's marker than Przymorze Małe was.
+    /// </summary>
+    [Theory]
+    [InlineData(54.4418, 18.5600, "Sopot")]       // nearer Gdańsk's marker than Przymorze was
+    [InlineData(54.5189, 18.5319, "Gdynia")]
+    [InlineData(48.8486, 2.4377, "Vincennes")]    // just outside the Paris boundary
+    [InlineData(48.8642, 2.4432, "Montreuil")]
+    [InlineData(48.9070, 2.3330, "Saint-Ouen")]
+    public void NameFor_KeepsATownBesideTheCity(double latitude, double longitude, string expected)
+    {
+        Assert.Equal(expected, Places.NameFor(new GeoPoint(latitude, longitude)));
+    }
+
+    /// <summary>
+    /// The threshold that protects villages a municipal merger filed under a town's code. Nevele
+    /// is eleven thousand people six kilometres from Deinze and shares its commune code; Templeuve
+    /// shares Tournai's. Both towns fall short of the population at which districts are dropped,
+    /// which is the only thing keeping these two names in the list.
+    /// </summary>
+    [Theory]
+    [InlineData(51.0353, 3.5457, "Nevele")]
+    [InlineData(50.6441, 3.2801, "Templeuve")]
+    public void NameFor_KeepsAVillageTheTownAbsorbed(double latitude, double longitude, string expected)
+    {
+        Assert.Equal(expected, Places.NameFor(new GeoPoint(latitude, longitude)));
+    }
+
+    /// <summary>
+    /// The other half of the same rule, and the one that costs the most if it is got wrong: a
+    /// hamlet has no city beside it to lose to, so it still names the folder. Population breaks a
+    /// tie between records standing on each other — it is not a filter, and it must never become
+    /// one: 88.5% of the Polish rows, these three included, carry a population of nought.
+    /// </summary>
+    [Theory]
+    [InlineData(49.1479, 22.4773, "Wetlina")]     // a Bieszczady village
+    [InlineData(49.2511, 19.9336, "Bystre")]      // the summit of Giewont, named for the hamlet below
+    [InlineData(53.7667, 21.7333, "Suchy Róg")]   // out on Lake Śniardwy
+    public void NameFor_StillNamesTheHamlet_WhenNothingBiggerIsBeside(
+        double latitude, double longitude, string expected)
+    {
+        Assert.Equal(expected, Places.NameFor(new GeoPoint(latitude, longitude)));
     }
 
     [Fact]

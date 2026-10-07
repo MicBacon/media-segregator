@@ -1,6 +1,6 @@
 # Writing tests for Media Segregator
 
-The suite is 211 tests that run in about 350 ms with no mocks, no fakes and no committed fixture
+The suite is 235 tests that run in about 430 ms with no mocks, no fakes and no committed fixture
 binaries. It is worth keeping it that way. Read one existing file end to end before adding to it —
 [FileCopierTests.cs](FileCopierTests.cs) for I/O, [MediaLocationTests.cs](MediaLocationTests.cs) and
 [MediaDateTests.cs](MediaDateTests.cs) for binary fixtures,
