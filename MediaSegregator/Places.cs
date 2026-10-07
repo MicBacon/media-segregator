@@ -15,10 +15,17 @@ namespace MediaSegregator;
 /// Polish places carry their Polish names. Nothing here throws: a missing or damaged resource
 /// simply means every shot is filed under its coordinates.
 ///
-/// Nearest wins outright, with no weighting by population. That is what lets a photo taken in the
-/// Bieszczady be filed under the hamlet it was taken in rather than the nearest town, and it is
-/// also why a city dense with named neighbourhoods can answer with one of those instead of itself:
-/// shooting in Asagaya gives "Asagaya-minami", not "Tokyo".
+/// GeoNames holds a city's districts as populated places in their own right — Przymorze Małe
+/// beside Gdańsk, "Paris 09 Opéra" beside Paris — every one of them nearer to a camera in the city
+/// than the city marker is, so plain nearest-wins named folders after districts. Two things fix
+/// that, and both come from the data rather than from a guess. The districts are dropped when the
+/// list is built, by administrative code; and the distance each of them stood from its city is
+/// kept as that city's <em>reach</em>, so a fix is credited to the place it lies deepest inside
+/// rather than to the marker it happens to be nearest. The recipe in README.md builds both.
+///
+/// A village has no districts and so no measured reach, falling back to
+/// <see cref="DefaultReachKm"/> — which is why a photograph in the Bieszczady is still filed under
+/// the hamlet it was taken in rather than under a town an hour away.
 /// </summary>
 public static class Places
 {
@@ -40,6 +47,14 @@ public static class Places
     /// rows, and a band four times wider than necessary measures four times as many of them.
     /// </summary>
     private const double BandDegrees = MaxDistanceKm / 110.0;
+
+    /// <summary>
+    /// The reach credited to a place the data gives no extent for, which is every village and
+    /// hamlet. Two kilometres is wide enough that a photograph taken at the edge of a village is
+    /// still filed under it, and narrow enough that the village next door is not.
+    /// </summary>
+    private const double DefaultReachKm = 2;
+
 
     private const string ResourceName = "MediaSegregator.Data.cities.tsv";
 
@@ -72,7 +87,13 @@ public static class Places
         // One cosine for the whole query rather than one per candidate: over this few kilometres the
         // flat-earth approximation is accurate to metres, far below the resolution of the answer.
         double longitudeScale = Math.Cos(point.Latitude * Math.PI / 180) * 111.320;
-        double bestKm = MaxDistanceKm;
+
+        // Not the shortest distance but the deepest containment: each candidate's distance measured
+        // against how far that place itself extends. Gdańsk's marker is twice as far from Przymorze
+        // as Sopot's is, and Przymorze is nevertheless in Gdańsk and not in Sopot; dividing by the
+        // reach is what says so. For the villages, where every reach is the same default, the
+        // ranking collapses back to plain distance.
+        double bestScore = double.MaxValue;
         string? best = null;
 
         for (int i = index; i < cities.Latitudes.Length && cities.Latitudes[i] <= limit; i++)
@@ -81,9 +102,16 @@ public static class Places
             double eastWest = WrappedDegrees(cities.Longitudes[i] - point.Longitude) * longitudeScale;
             double km = Math.Sqrt((northSouth * northSouth) + (eastWest * eastWest));
 
-            if (km < bestKm)
+            if (km > MaxDistanceKm)
             {
-                bestKm = km;
+                continue;
+            }
+
+            double score = km / Math.Max(DefaultReachKm, cities.Reaches[i]);
+
+            if (score < bestScore)
+            {
+                bestScore = score;
                 best = cities.Names[i];
             }
         }
@@ -120,11 +148,11 @@ public static class Places
             }
 
             using StreamReader reader = new(stream, Encoding.UTF8);
-            List<(float Latitude, float Longitude, string Name)> cities = [];
+            List<City> cities = [];
 
             while (reader.ReadLine() is { } line)
             {
-                if (TryParse(line, out (float Latitude, float Longitude, string Name) city))
+                if (TryParse(line, out City city))
                 {
                     cities.Add(city);
                 }
@@ -137,7 +165,8 @@ public static class Places
             return new CityIndex(
                 [.. cities.Select(static city => city.Name)],
                 [.. cities.Select(static city => city.Latitude)],
-                [.. cities.Select(static city => city.Longitude)]);
+                [.. cities.Select(static city => city.Longitude)],
+                [.. cities.Select(static city => city.Reach)]);
         }
         catch (Exception)
         {
@@ -145,8 +174,13 @@ public static class Places
         }
     }
 
-    /// <summary>One "name\tlatitude\tlongitude" row, skipped rather than fatal when malformed.</summary>
-    private static bool TryParse(string line, out (float Latitude, float Longitude, string Name) city)
+    /// <summary>
+    /// One "name\tlatitude\tlongitude\treach" row, skipped rather than fatal when malformed. The
+    /// reach is how far the place extends in kilometres, measured when the list is built from the
+    /// districts the place was collapsed from; it is optional and absent reads as nought, which
+    /// simply leaves the row on <see cref="DefaultReachKm"/> like any village.
+    /// </summary>
+    private static bool TryParse(string line, out City city)
     {
         city = default;
 
@@ -165,11 +199,27 @@ public static class Places
 
         if (afterLatitude <= 0
             || !float.TryParse(rest[..afterLatitude], NumberStyles.Float, CultureInfo.InvariantCulture,
-                out float latitude)
-            || !float.TryParse(rest[(afterLatitude + 1)..], NumberStyles.Float, CultureInfo.InvariantCulture,
+                out float latitude))
+        {
+            return false;
+        }
+
+        rest = rest[(afterLatitude + 1)..];
+        int afterLongitude = rest.IndexOf('\t');
+        ReadOnlySpan<char> longitudeText = afterLongitude < 0 ? rest : rest[..afterLongitude];
+
+        if (!float.TryParse(longitudeText, NumberStyles.Float, CultureInfo.InvariantCulture,
                 out float longitude))
         {
             return false;
+        }
+
+        if (afterLongitude < 0
+            || !double.TryParse(rest[(afterLongitude + 1)..], NumberStyles.Float,
+                CultureInfo.InvariantCulture, out double reach)
+            || reach < 0)
+        {
+            reach = 0;
         }
 
         string name = Sanitised(row[..afterName]);
@@ -179,7 +229,7 @@ public static class Places
             return false;
         }
 
-        city = (latitude, longitude, name);
+        city = new City(latitude, longitude, name, reach);
 
         return true;
     }
@@ -210,9 +260,13 @@ public static class Places
     private static readonly SearchValues<char> InvalidNameChars =
         SearchValues.Create(Path.GetInvalidFileNameChars());
 
-    /// <summary>Three parallel arrays ordered by latitude; the index into one indexes them all.</summary>
-    private sealed record CityIndex(string[] Names, float[] Latitudes, float[] Longitudes)
+    /// <summary>One row of the list, as it is read before being split into the arrays below.</summary>
+    private readonly record struct City(float Latitude, float Longitude, string Name, double Reach);
+
+    /// <summary>Four parallel arrays ordered by latitude; the index into one indexes them all.</summary>
+    private sealed record CityIndex(
+        string[] Names, float[] Latitudes, float[] Longitudes, double[] Reaches)
     {
-        public static CityIndex Empty { get; } = new([], [], []);
+        public static CityIndex Empty { get; } = new([], [], [], []);
     }
 }

@@ -24,8 +24,13 @@ abroad, while Poland keeps the full town, village and hamlet list. A photo taken
 is still filed under `Wetlina`, and a photo from Berlin now lands under `Berlin` instead of
 `2026-07-04/Zdjęcia/52.5N 13.4E`. The threshold is 15 km: generous anywhere inhabited, and short
 enough that open sea, desert and ice get coordinates instead of borrowing a name from over the
-horizon. Nearest wins outright, with no weighting by size — the rule that files a Bieszczady photo
-under its hamlet also means Tokyo Station lands under the ward nearest to it.
+horizon. Nearest wins, except inside a town that covers the fix: GeoNames keeps a city's districts
+as places of their own, nearer to the camera than the city marker, so distance alone named folders
+`Stare Miasto` for Kraków's main square and `Paris 09 Opéra` for the Opéra. Each place therefore
+claims what lies within its own reach — two kilometres at the least, more where its population says
+the town is larger — and the largest claimant names the folder. A village claims nothing, so a
+photo in the Bieszczady is still filed under `Wetlina`. One consequence worth knowing: an inner
+suburb falls inside a big city's reach, so a photo from Vincennes is filed under `Paris`.
 
 Running it twice over the same source is free: a file whose copy is already in the target folder
 under the same name and the same length is skipped.
@@ -44,9 +49,11 @@ dotnet publish MediaSegregator/MediaSegregator.csproj \
 
 #### Place names
 
-`MediaSegregator/Data/cities.tsv` holds 267 039 rows of `name<TAB>latitude<TAB>longitude`, sorted by
-latitude, embedded in the executable — 221 613 from the world and 45 426 from Poland. It is built
-from three [GeoNames](https://www.geonames.org/) exports:
+`MediaSegregator/Data/cities.tsv` holds 265 681 rows of
+`name<TAB>latitude<TAB>longitude<TAB>reach`, sorted by latitude, embedded in the executable. The
+reach is how far the place extends in kilometres, and it carries the whole of what the lookup needs
+to prefer a city over its own districts. It is built from three
+[GeoNames](https://www.geonames.org/) exports:
 
 | File | Used for |
 | --- | --- |
@@ -62,6 +69,36 @@ over. Polish names are replaced by their `isolanguage = pl` alternate name where
 preferring the entry flagged `isPreferredName` and ignoring historical and colloquial spellings —
 this is what turns GeoNames' "Warsaw" into "Warszawa". Latitude and longitude are rounded to four
 decimals throughout.
+
+##### A city's districts, and its reach
+
+GeoNames holds a city's districts as populated places in their own right — `Paris 09 Opéra`,
+Gdańsk's `Przymorze Małe`, Warsaw's `Ursynów`, Kraków's `Stare Miasto` — each of them nearer to a
+camera in the city than the city marker is. They are dropped here rather than worked around at
+lookup time, and the municipality they belong to is read off the administrative codes, not guessed
+from distance: **Sopot is closer to Gdańsk's marker than Przymorze Małe is, and Sopot is a city
+while Przymorze is a district.**
+
+The municipality is `admin4` in the countries that fill it in (France, Belgium, Germany) and
+`admin3` in Poland, where `admin4` is all but unused — 63 rows out of 45 426 carry one. A group
+collapses to its most populous row only when that row passes **100 000 inhabitants**, and that
+threshold is load-bearing in two directions:
+
+- Below it, villages that a municipal merger filed under a town's code keep their names — Belgian
+  `Templeuve` under Tournai, `Nevele` under Deinze, and every Polish village sharing a rural gmina
+  with its seat. All 39 Polish groups that do collapse are cities with county rights, containing
+  that one city and nothing else.
+- The Polish `admin3` pass is **Poland-only**, and deliberately so. Applied worldwide it is a
+  disaster: in Côte d'Ivoire and parts of China the level is empty or regional, and one pass
+  swallows 582 villages into `Man`.
+
+Collapsing alone is not enough, because the nearest surviving row to a fix in northern Gdańsk is
+Sopot's marker, not Gdańsk's. So each collapse also records **how far its districts reached** — the
+distance from the city to the furthest district absorbed — and the lookup ranks candidates by
+`distance / reach` rather than by distance. A village has no districts and so no reach, and falls
+back to a two-kilometre default, which is what leaves hamlet names alone. Districts further than
+30 km are treated as data errors rather than extent (one row named Sosnowiec carries Sosnowiec's
+gmina code from 109 km away), and the reach is capped at the 15 km the lookup searches anyway.
 
 ##### Two vandalised rows
 
