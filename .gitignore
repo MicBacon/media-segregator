@@ -40,4 +40,4 @@ packages/
 *.cache
 .DS_Store
 Thumbs.db
-MediaSegregator/Data/*
+*.tsv
