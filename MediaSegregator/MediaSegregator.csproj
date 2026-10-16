@@ -9,8 +9,11 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!--
       The icon Windows Explorer shows on the .exe, which has to be an .ico — a PNG will not do.
-      Assets/app.ico is the same monument sign, centred on a transparent square (the artwork is
-      portrait) and rendered at 16 through 256 px. Regenerate it from the PNG if the sign changes.
+      Assets/Folder.svg is the source: a CC0 folder outline from the cc0-icons set. Neither
+      Windows nor Avalonia's WindowIcon takes an SVG, so app.ico (16 through 256 px) and
+      app-icon.png (256 px) are rasters of it, with currentColor rendered as amber #F59E0B so the
+      outline stays visible on a dark taskbar. Regenerate both if the SVG changes. The earlier
+      monument sign was a protected emblem and was replaced.
     -->
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
@@ -37,8 +40,7 @@
     <EmbeddedResource Include="Data/cities.tsv" />
 
     <!-- The window and taskbar icon, which Avalonia loads by resource path at runtime. -->
-    <AvaloniaResource Include="Assets/Obiekt_zabytkowy_znak.png" />
-    <AvaloniaResource Include="Assets/Obiekt_zabytkowy_znak-window.png" />
+    <AvaloniaResource Include="Assets/app-icon.png" />
   </ItemGroup>
 
   <ItemGroup>

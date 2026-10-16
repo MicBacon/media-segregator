@@ -4,7 +4,7 @@
         x:Class="MediaSegregator.MainWindow"
         x:DataType="local:MainWindow"
         Title="Segregator mediów"
-        Icon="/Assets/Obiekt_zabytkowy_znak-window.png"
+        Icon="/Assets/app-icon.png"
         Width="1000" Height="500"
         CanResize="False">
 
