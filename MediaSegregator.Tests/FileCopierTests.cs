@@ -1129,15 +1129,15 @@ public sealed class FileCopierTests : IDisposable
     }
 
     [Fact]
-    public void Copy_PutsThePlaceBelowTheMediaKind()
+    public void Copy_PutsThePlaceInTheDayFolder()
     {
         ScannedFile photo = Scan(WriteFile(_source, "shot.jpg"));
         ScannedFile video = Scan(WriteFile(_source, "clip.mp4")) with { Kind = MediaKind.Video };
 
         FileCopier.Copy([photo, video], _destination, RouteTo(new DateTime(2026, 3, 1), "Zakopane"));
 
-        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "Zakopane", "shot.jpg")));
-        Assert.True(File.Exists(Dated("2026-03-01", "Wideo", "Zakopane", "clip.mp4")));
+        Assert.True(File.Exists(Dated("2026-03-01 Zakopane", "Zdjęcia", "shot.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01 Zakopane", "Wideo", "clip.mp4")));
     }
 
     [Fact]
@@ -1149,8 +1149,8 @@ public sealed class FileCopierTests : IDisposable
         FileCopier.Copy([here], _destination, RouteTo(new DateTime(2026, 3, 1), "Kraków"));
         FileCopier.Copy([there], _destination, RouteTo(new DateTime(2026, 3, 1), "Gdańsk"));
 
-        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "Kraków", "here.jpg")));
-        Assert.True(File.Exists(Dated("2026-03-01", "Zdjęcia", "Gdańsk", "there.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01 Kraków", "Zdjęcia", "here.jpg")));
+        Assert.True(File.Exists(Dated("2026-03-01 Gdańsk", "Zdjęcia", "there.jpg")));
     }
 
     [Fact]

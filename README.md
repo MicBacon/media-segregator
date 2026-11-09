@@ -5,15 +5,18 @@ so the source folder is left exactly as it was found.
 
 ```
 2026-03-01/
-  Zdjęcia/
-    zrzut-ekranu.png            <- no coordinates, so no third level
-    Warszawa/IMG_0001.jpg
-    Zakopane/IMG_0002.jpg
-  Wideo/
-    Warszawa/VID_0003.mp4
+  Zdjęcia/zrzut-ekranu.png      <- no coordinates, so the folder is the bare date
+2026-03-01 Warszawa/
+  Zdjęcia/IMG_0001.jpg
+  Wideo/VID_0003.mp4
+2026-03-01 Zakopane/
+  Zdjęcia/IMG_0002.jpg
 Bez daty/
   Zdjęcia/skan.jpg              <- nothing in the file or its name says when
 ```
+
+Each day folder is named `yyyy-MM-dd Miejscowość` — the date and the place in one name, separated
+by a space, so a day spent in two towns is two folders that still sort together by date.
 
 The date comes from EXIF or QuickTime metadata, falling back to the date camera apps bake into the
 file name; the filesystem timestamp is deliberately never used. The place comes from the GPS fix in
@@ -22,7 +25,7 @@ the file's own metadata, resolved to the nearest settlement with no network call
 **Place names cover the world** — GeoNames' worldwide `cities500` list is embedded for photos taken
 abroad, while Poland keeps the full town, village and hamlet list. A photo taken in the Bieszczady
 is still filed under `Wetlina`, and a photo from Berlin now lands under `Berlin` instead of
-`2026-07-04/Zdjęcia/52.5N 13.4E`. The threshold is 15 km: generous anywhere inhabited, and short
+`2026-07-04 52.5N 13.4E/Zdjęcia`. The threshold is 15 km: generous anywhere inhabited, and short
 enough that open sea, desert and ice get coordinates instead of borrowing a name from over the
 horizon. Nearest wins, except inside a town that covers the fix: GeoNames keeps a city's districts
 as places of their own, nearer to the camera than the city marker, so distance alone named folders

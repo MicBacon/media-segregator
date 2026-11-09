@@ -93,32 +93,64 @@ public sealed class DestinationLayoutTests : IDisposable
     {
         string subfolder = DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, "Warszawa");
 
-        Assert.Equal(["2026-03-01", "Zdjęcia", "Warszawa"], subfolder.Split(Path.DirectorySeparatorChar));
+        Assert.Equal(["2026-03-01 Warszawa", "Zdjęcia"], subfolder.Split(Path.DirectorySeparatorChar));
     }
 
     // ------------------------------------------------------------------- place
 
     [Fact]
-    public void SubfolderFor_AddsThePlaceBelowTheMediaKind()
+    public void SubfolderFor_JoinsThePlaceToTheDate_AboveTheMediaKind()
     {
         Assert.Equal(
-            Expected("2026-03-01", "Zdjęcia", "Zakopane"),
+            Expected("2026-03-01 Zakopane", "Zdjęcia"),
             DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, "Zakopane"));
 
         Assert.Equal(
-            Expected("2026-03-01", "Wideo", "Zakopane"),
+            Expected("2026-03-01 Zakopane", "Wideo"),
             DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Video, "Zakopane"));
     }
 
     /// <summary>
+    /// Place names are already folder-safe, spaces and all — "Nowy Targ", "Bielsko-Biała", and the
+    /// "52.5N 13.4E" label for a fix nothing is near — so they go in as they are.
+    /// </summary>
+    [Theory]
+    [InlineData("Nowy Targ", "2026-03-01 Nowy Targ")]          // a space inside the name
+    [InlineData("Bielsko-Biała", "2026-03-01 Bielsko-Biała")]  // a hyphen and a diacritic
+    [InlineData("52.5N 13.4E", "2026-03-01 52.5N 13.4E")]      // Places' coordinate fallback
+    public void SubfolderFor_KeepsThePlaceNameAsItIs(string place, string expected)
+    {
+        Assert.Equal(
+            Expected(expected, "Zdjęcia"),
+            DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, place));
+    }
+
+    /// <summary>Windows refuses a folder whose name ends in a space, so padding must not reach it.</summary>
+    [Fact]
+    public void SubfolderFor_TrimsWhitespaceAroundThePlace()
+    {
+        Assert.Equal(
+            Expected("2026-03-01 Sopot", "Zdjęcia"),
+            DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, "  Sopot "));
+    }
+
+    [Fact]
+    public void SubfolderFor_TwoPlacesOnOneDay_AreTwoFolders()
+    {
+        Assert.NotEqual(
+            DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, "Kraków"),
+            DestinationLayout.SubfolderFor(new DateTime(2026, 3, 1), MediaKind.Photo, "Gdańsk"));
+    }
+
+    /// <summary>
     /// Screenshots, WhatsApp media and older videos carry no coordinates, and most libraries are
-    /// mostly those — a "Bez lokalizacji" folder beside every date would bury the ones that do.
+    /// mostly those — a "2026-03-01 Bez lokalizacji" beside every date would bury the ones that do.
     /// </summary>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void SubfolderFor_WithoutAPlace_StopsAtTheMediaKind(string? place)
+    public void SubfolderFor_WithoutAPlace_IsTheBareDate(string? place)
     {
         Assert.Equal(
             Expected("2026-03-01", "Zdjęcia"),
@@ -138,7 +170,7 @@ public sealed class DestinationLayoutTests : IDisposable
     public void SubfolderFor_UndatedMediaStillGetsItsPlace()
     {
         Assert.Equal(
-            Expected("Bez daty", "Zdjęcia", "Gdańsk"),
+            Expected("Bez daty Gdańsk", "Zdjęcia"),
             DestinationLayout.SubfolderFor(null, MediaKind.Photo, "Gdańsk"));
     }
 
@@ -232,14 +264,14 @@ public sealed class DestinationLayoutTests : IDisposable
     }
 
     /// <summary>
-    /// A name-only date carries no coordinates with it, so there is no third segment: the place is
-    /// omitted rather than guessed at or filled in with a coordinate label.
+    /// A name-only date carries no coordinates with it, so the day folder is the bare date: the
+    /// place is omitted rather than guessed at or filled in with a coordinate label.
     /// </summary>
     [Fact]
-    public void TargetFor_WithNoCoordinates_AddsNoPlaceSegment()
+    public void TargetFor_WithNoCoordinates_AddsNoPlaceToTheDate()
     {
         CopyTarget target = DestinationLayout.TargetFor(Plain("IMG_20260301_142233.jpg"));
 
-        Assert.Equal(2, target.Subfolder.Split(Path.DirectorySeparatorChar).Length);
+        Assert.Equal("2026-03-01", target.Subfolder.Split(Path.DirectorySeparatorChar)[0]);
     }
 }

@@ -15,7 +15,7 @@ authority on how tests are written here.
 
 ```bash
 dotnet build                                  # whole solution (MediaSegregator.slnx)
-dotnet test                                   # 235 tests, ~430 ms — must be green before you finish
+dotnet test                                   # 240 tests, ~430 ms — must be green before you finish
 dotnet run --project MediaSegregator          # launch the app
 ```
 
@@ -43,7 +43,7 @@ A handful of pure-ish core types do the work; the window is a thin shell over th
 | [MediaDate.cs](MediaSegregator/MediaDate.cs) | Capture date from EXIF/QuickTime metadata, falling back to the date in the file name |
 | [MediaLocation.cs](MediaSegregator/MediaLocation.cs) | GPS fix from the EXIF GPS IFD or the video's ISO 6709 string, as a `GeoPoint` |
 | [Places.cs](MediaSegregator/Places.cs) | `GeoPoint` → nearest settlement within 15 km, from the embedded GeoNames list: worldwide `cities500` plus the full Poland list; coordinates otherwise |
-| [DestinationLayout.cs](MediaSegregator/DestinationLayout.cs) | `2026-03-01/Zdjęcia/Warszawa` vs `Bez daty/Wideo` — pure string work |
+| [DestinationLayout.cs](MediaSegregator/DestinationLayout.cs) | `2026-03-01 Warszawa/Zdjęcia` vs `Bez daty/Wideo` — pure string work |
 | [FileCopier.cs](MediaSegregator/FileCopier.cs) | Does the I/O; routing is injected as `Func<ScannedFile, CopyTarget>?` |
 | [FileMover.cs](MediaSegregator/FileMover.cs) | **Parked, unreferenced, untested.** Moving instead of copying, kept for a future option — read its doc comment before wiring it up |
 | [MainWindow.axaml.cs](MediaSegregator/MainWindow.axaml.cs) | Window that is its own view model (`INotifyPropertyChanged`) |
